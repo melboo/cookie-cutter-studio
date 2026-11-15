@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CUT IT. Cookie cutter studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f1e8; --panel:#fff; --ink:#111; --muted:#55524a; --line:#111;
+  --accent:#ff4f9a; --accent-ink:#111; --pop:#e6ff00; --dough:#f1d8a8; --dough-edge:#6b3e1e; --detail:#b2733a;
+  --sel:#2f6fdb; --mono:'Space Mono',ui-monospace,monospace; --disp:'Archivo',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.4 var(--disp)}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel);border:3px solid var(--ink);border-radius:0;padding:6px 12px;cursor:pointer;white-space:nowrap;font-weight:800;box-shadow:3px 3px 0 var(--ink);transition:transform .06s,box-shadow .06s}
+button:hover{background:var(--pop)}
+button:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+button:disabled{opacity:.4;cursor:default;background:var(--panel)}
+button.primary{background:var(--pop);font-weight:900;text-transform:uppercase;font-size:15px;padding:8px 16px;box-shadow:5px 5px 0 var(--ink)}
+button.primary:hover{background:var(--accent)}
+button.primary:active{transform:translate(5px,5px);box-shadow:0 0 0 var(--ink)}
+.app{display:grid;grid-template-rows:auto 1fr;height:100%}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:4px solid var(--ink);background:var(--bg);flex-wrap:wrap}
+.brand{background:var(--ink);color:var(--bg);font-weight:900;font-size:24px;letter-spacing:-.5px;padding:3px 11px;transform:rotate(-2deg);margin-right:4px}
+#name{border:3px solid transparent;background:transparent;border-radius:0;padding:5px 8px;font-family:var(--mono);font-weight:700;min-width:120px;width:170px}
+#name:hover,#name:focus{border-color:var(--ink);background:#fff;outline:none}
+.spacer{flex:1}
+main{display:grid;grid-template-columns:72px 1fr 350px;min-height:0}
+#tools{display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;border-right:4px solid var(--ink);background:var(--bg)}
+.tool{width:46px;height:46px;padding:0;display:grid;place-items:center}
+.tool.on{background:var(--pop)}
+.tool svg{width:22px;height:22px}
+.sep{width:34px;height:4px;background:var(--ink);margin:2px 0}
+#stage{position:relative;min-width:0;min-height:0;overflow:hidden;background-color:#fff;background-image:radial-gradient(#cfcabb 1.5px,transparent 1.5px);background-size:24px 24px}
+#svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none}
+#three{position:absolute;inset:0;display:none;background:#111}
+#stage.show3d #three{display:block}
+#stage.show3d #svg,#stage.show3d #selbar,#stage.show3d #hint{display:none}
+#stage.cookie #check,#stage.cookie #selbar,#stage.cookie #hint{display:none!important}
+.viewtoggle{position:absolute;top:14px;right:14px;display:flex;z-index:5;box-shadow:4px 4px 0 var(--ink)}
+.viewtoggle button{box-shadow:none;font-family:var(--mono);font-size:13px;padding:7px 13px}
+.viewtoggle button+button{border-left:0}
+.viewtoggle button:active{transform:none}
+.viewtoggle button.on{background:var(--ink);color:var(--bg)}
+#hint{position:absolute;left:14px;bottom:12px;color:var(--muted);font-family:var(--mono);font-size:12px;pointer-events:none;z-index:4;max-width:60%}
+#dims{position:absolute;right:14px;bottom:12px;color:var(--bg);font-family:var(--mono);font-size:12px;z-index:4;background:var(--ink);padding:4px 10px}
+#dims:empty{display:none}
+.sizes{display:flex;box-shadow:3px 3px 0 var(--ink)}
+.sizes button{box-shadow:none;padding:5px 10px;text-transform:uppercase;font-size:13px}
+.sizes button+button{border-left:0}
+.sizes button:active{transform:none}
+.sizes button.on{background:var(--ink);color:var(--bg)}
+.sizes small{font-family:var(--mono);font-weight:400;font-size:11px;margin-left:3px}
+#check{position:absolute;right:14px;bottom:48px;z-index:4;max-width:340px;font-size:13px;font-weight:900;text-transform:uppercase;padding:8px 12px;background:var(--pop);border:4px solid var(--ink);box-shadow:5px 5px 0 var(--ink);color:var(--ink);transform:rotate(-1.5deg)}
+#check span{display:block;font-family:var(--mono);font-weight:400;text-transform:none;font-size:12px;margin-top:3px;color:var(--ink)}
+#check .warn{color:var(--ink);background:var(--accent);padding:0 3px}
+.examples{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.exbtn{padding:4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:var(--mono);font-weight:400;font-size:10px;white-space:normal;line-height:1.15;box-shadow:2px 2px 0 var(--ink)}
+.exbtn img{display:block;width:100%;aspect-ratio:1;object-fit:contain;background:#fff}
+.note.bad{background:var(--accent);padding:4px 6px;color:var(--ink)}
+.rules{margin:4px 0 8px;padding-left:18px;font-family:var(--mono);font-size:12px;color:var(--ink)}
+.rules li{margin:4px 0}
+select.textin{padding:6px}
+#selbar{position:absolute;top:14px;left:14px;display:none;gap:6px;background:var(--bg);border:3px solid var(--ink);padding:6px;z-index:5;box-shadow:4px 4px 0 var(--ink);flex-wrap:wrap;max-width:calc(100% - 240px)}
+#selbar.show{display:flex}
+#selbar button{padding:4px 9px;font-size:13px;box-shadow:2px 2px 0 var(--ink)}
+#selbar .lbl{align-self:center;font-family:var(--mono);font-size:12px;padding:0 6px}
+#empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:3}
+#empty .card{pointer-events:auto;background:var(--accent);border:5px solid var(--ink);box-shadow:10px 10px 0 var(--ink);padding:28px 30px;text-align:left;max-width:420px}
+#empty h2{font-weight:900;margin:0 0 8px;font-size:40px;line-height:.95;letter-spacing:-1px;text-transform:uppercase}
+#empty p{margin:0 0 16px;font-family:var(--mono);font-size:13px}
+#empty .note{color:var(--ink)}
+#stage.drag::after{content:"DROP IT";position:absolute;inset:14px;border:5px dashed var(--ink);display:grid;place-items:center;font-weight:900;font-size:56px;color:var(--ink);background:rgba(230,255,0,.85);z-index:9}
+#panel{border-left:4px solid var(--ink);background:var(--bg);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:4px solid var(--ink)}
+.tabs button{flex:1;border:0;box-shadow:none;background:transparent;padding:12px 8px;font-weight:900;font-size:15px;text-transform:uppercase}
+.tabs button+button{border-left:4px solid var(--ink)}
+.tabs button:active{transform:none}
+.tabs button.on{background:var(--ink);color:var(--bg)}
+.tabpane{display:none;padding:16px;overflow:auto;flex:1}
+.tabpane.on{display:block}
+h3{font-size:15px;text-transform:uppercase;letter-spacing:0;color:var(--ink);margin:20px 0 8px;font-weight:900}
+h3:first-child{margin-top:2px}
+.row{margin:10px 0}
+.row label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;margin-bottom:3px}
+.row label output{font-variant-numeric:tabular-nums;font-weight:700}
+input[type=range]{width:100%;accent-color:var(--ink)}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0}
+.check input{accent-color:var(--ink)}
+.num{display:grid;grid-template-columns:1fr 84px;align-items:center;gap:8px;margin:7px 0;font-family:var(--mono);font-size:12px}
+.num input{width:100%;border:3px solid var(--ink);border-radius:0;padding:4px 7px;background:#fff;text-align:right;font-weight:700}
+.note{font-family:var(--mono);font-size:12px;color:var(--muted);margin:8px 0}
+.drop{border:4px dashed var(--ink);padding:18px;text-align:center;cursor:pointer;background:#fff}
+.drop:hover{background:var(--pop)}
+.drop strong{display:block;margin-bottom:2px;font-weight:900;font-size:18px;text-transform:uppercase}
+.thumbimg{max-width:100%;max-height:120px;display:block;margin:10px auto 0;border:3px solid var(--ink)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.gcard{border:3px solid var(--ink);padding:8px;background:#fff;display:flex;flex-direction:column;gap:6px;cursor:pointer;position:relative;box-shadow:4px 4px 0 var(--ink)}
+.gcard:hover{background:var(--pop)}
+.gcard.cur{background:var(--accent)}
+.gcard svg{width:100%;aspect-ratio:1;background:#fff;border:2px solid var(--ink)}
+.gcard .t{font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcard .a{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.gcard .acts{display:flex;gap:6px}
+.gcard .acts button{flex:1;padding:3px 0;font-size:12px;box-shadow:2px 2px 0 var(--ink)}
+.status{font-family:var(--mono);font-size:12px;color:var(--muted);margin:6px 0}
+.textin{width:100%;border:3px solid var(--ink);border-radius:0;padding:6px 8px;background:#fff;font-family:var(--mono);font-size:13px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--pop);font-weight:800;padding:10px 18px;opacity:0;transition:.2s;pointer-events:none;z-index:50;font-size:14px}
+#toast.show{opacity:1;transform:translateX(-50%)}
+.seg{display:flex;margin:6px 0;box-shadow:3px 3px 0 var(--ink)}
+.seg button{flex:1;box-shadow:none;padding:6px 4px;font-size:12px;text-transform:uppercase;white-space:normal}
+.seg button+button{border-left:0}
+.seg button:active{transform:none}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.shapes{display:flex;gap:8px;flex-wrap:wrap}
+.shapes button{width:48px;height:48px;padding:0;display:grid;place-items:center}
+.shapes svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.5;stroke-linejoin:round}
+.cstat{font-family:var(--mono);font-size:12px;margin-bottom:6px}
+.ctip{border:3px solid var(--ink);padding:8px 10px;margin:6px 0;font-family:var(--mono);font-size:12px;background:#fff}
+.ctip.warn{background:var(--accent)}
+.ctip.ok{background:var(--pop);font-weight:700}
+details.more{border:3px solid var(--ink);background:#fff;margin:18px 0 8px;padding:0 12px}
+details.more summary{cursor:pointer;font-weight:900;text-transform:uppercase;padding:10px 0}
+#dlAll{font-size:12px;padding:3px 8px;box-shadow:2px 2px 0 var(--ink)}
+.hrow{display:contents}
+header .sm{display:none}
+.monly{display:none!important}
+@media (max-width:860px){
+  /* phone: only the core flow. Draw or upload, look, download. Everything else lives on desktop. */
+  html,body{height:100%;overflow:hidden}
+  .app{display:flex;flex-direction:column;height:100dvh}
+  header{flex:0 0 auto;flex-wrap:nowrap;gap:8px;padding:8px;border-bottom-width:3px}
+  .brand{font-size:18px;padding:2px 7px;margin-right:0;flex:0 0 auto}
+  header .lg{display:none} header .sm{display:inline}
+  #name,#redo,.sizes,#newBtn,#saveBtn,.hrow .spacer{display:none}
+  #undo{width:42px;min-height:42px;padding:0;font-size:22px;line-height:1;flex:0 0 auto}
+  header .viewtoggle{position:static;flex:1 1 auto;min-width:0;box-shadow:3px 3px 0 var(--ink)}
+  header .viewtoggle button{flex:1 1 0;min-height:42px;padding:4px 4px;font-size:12px}
+  #dlBtn{flex:0 0 auto;font-size:13px;min-height:42px;padding:6px 10px;box-shadow:3px 3px 0 var(--ink)}
+  main{flex:1 1 auto;min-height:0;display:block;position:relative}
+  #stage{height:100%}
+  #panel{display:none}
+  #tools{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));flex-direction:row;gap:10px;padding:7px;border:3px solid var(--ink);background:var(--bg);box-shadow:4px 4px 0 var(--ink)}
+  #tools .tool[data-tool=select],#fitBtn,#imgToggle,.sep{display:none!important}
+  .monly{display:grid!important}
+  .tool{width:50px;height:50px;box-shadow:none}
+  .tool:active{transform:none}
+  .tool svg{width:24px;height:24px}
+  #selbar{top:8px;left:8px;right:auto;max-width:calc(100% - 16px);box-shadow:3px 3px 0 var(--ink)}
+  #selbar .seg{flex:1 1 100%}
+  #check{left:8px;right:auto;bottom:calc(88px + env(safe-area-inset-bottom));max-width:calc(100% - 16px);font-size:12px;padding:6px 9px;transform:none;box-shadow:3px 3px 0 var(--ink)}
+  #check span{font-size:11px}
+  #dims{display:none}
+  #hint{display:none}
+  #toast{bottom:calc(92px + env(safe-area-inset-bottom));max-width:90vw;text-align:center}
+  #stage.drag::after{font-size:34px}
+}
+@media (max-width:380px){ .brand{font-size:15px;padding:2px 5px} #dlBtn{padding:6px 7px;font-size:12px} #undo{width:38px} header{gap:6px;padding:8px 6px} header .viewtoggle button{font-size:11px;padding:4px 2px} }
+@media (prefers-reduced-motion:reduce){button,#toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand">CUT IT.</div>
+  <input id="name" value="Untitled cookie" aria-label="Design name">
+  <div class="hrow">
+    <button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><span class="lg">Undo</span><span class="sm" aria-hidden="true">↶</span></button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><span class="lg">Redo</span><span class="sm" aria-hidden="true">↷</span></button>
+    <div class="sizes" id="sizes" title="Cutter size (longest side)"></div>
+    <div class="spacer"></div>
+    <button id="newBtn">New</button>
+    <button id="saveBtn">Save</button>
+  </div>
+  <button id="dlBtn" class="primary"><span class="lg">Download 3D file</span><span class="sm">Download</span></button>
+</header>
+<main>
+  <nav id="tools">
+    <button class="tool on" data-tool="select" title="Select & move (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 3l14 8-6 1.5L10 19z"/></svg></button>
+    <button class="tool" data-tool="pen" title="Draw (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c3-1 4-4 7-7l6-6 2 2-6 6c-3 3-6 4-9 5z"/></svg></button>
+    <button class="tool" data-tool="erase" title="Erase detail (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M8 20h12M4 15l9-9 6 6-7 7H8z"/></svg></button>
+    <div class="sep"></div>
+    <button class="tool" id="upBtn" title="Upload a picture" aria-label="Upload a picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7 9l5-5 5 5M5 19h14"/></svg></button>
+    <button class="tool monly" id="clearBtn" title="Clear the drawing" aria-label="Clear the drawing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button>
+    <button class="tool" id="fitBtn" title="Fit to screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button class="tool" id="imgToggle" title="Show / hide traced image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></button>
+  </nav>
+  <section id="stage">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="three"></div>
+    <div id="selbar"></div>
+    <div class="viewtoggle" id="viewtoggle"><button id="v2d">Draw</button><button id="vCookie" class="on">Cookie</button><button id="v3d">3D</button></div>
+    <div id="empty"><div class="card">
+      <h2>Make a cookie cutter</h2>
+      <p>Upload a drawing, or draw one right here. Dark lines on a light background trace best.</p>
+      <button class="primary" id="emptyUpload">Upload an image</button> <button class="primary" id="emptyDraw" style="background:#fff">Draw</button>
+      <div class="note" style="margin-top:12px">Or try an example from the Draw tab.</div>
+    </div></div>
+    <div id="hint"></div>
+    <div id="check" style="display:none"></div>
+    <div id="dims"></div>
+  </section>
+  <aside id="panel">
+    <div class="tabs">
+      <button data-tab="image" class="on">Draw</button>
+      <button data-tab="print" hidden>Print</button>
+      <button data-tab="gallery">Gallery</button>
+    </div>
+    <div class="tabpane on" id="tab-image">
+      <h3>Upload a picture</h3>
+      <div class="drop" id="drop"><strong>Choose image</strong><span class="note">Drawings, clip art, stickers, logos. You can also drop or paste one.</span>
+        <img id="srcThumb" class="thumbimg" alt="" hidden></div>
+      <input type="file" id="file" accept="image/*" hidden>
+      <p class="note" id="traceNote" hidden></p>
+      <h3>Examples</h3>
+      <div class="examples" id="examples"></div>
+      <h3 id="coachH" hidden>Cookie coach</h3>
+      <div id="coach"></div>
+      <div id="aiBox" hidden>
+        <label class="check" style="margin-top:12px"><input type="checkbox" id="aiOn" checked> Cookie Monster AI helps while you draw</label>
+        <div id="aiOut"></div>
+      </div>
+      <details class="more"><summary>Printing and baking</summary>
+      <ul class="rules">
+        <li>Print in PLA or PETG, 0.2 mm layers, flat rim down, no supports</li>
+        <li>Roll the dough to 5 mm</li>
+        <li>Dip the cutter in flour before each press</li>
+        <li>Wash by hand and keep dough contact short</li>
+      </ul></details>
+      <details class="more" id="traceMore" hidden><summary>Adjust how the picture was traced</summary>
+      <div class="row"><label for="detSrc">Stamp details from</label>
+        <select id="detSrc" class="textin"><option value="auto">Automatic</option><option value="lines">Drawn lines</option><option value="edges">Colour edges</option><option value="none">No details (cutter only)</option></select></div>
+      <div class="row"><label for="detLevel">Detail level</label>
+        <select id="detLevel" class="textin"><option value="7">Bold: only long lines that shape the cookie</option><option value="3.5" selected>Balanced</option><option value="1">Fine: keep every little line</option></select></div>
+      <div class="row"><label>Detail sensitivity <output id="o_sens"></output></label><input type="range" id="sens" min="0" max="1" step="0.05" value="0.5"></div>
+      <div class="row"><label>Background tolerance <output id="o_bgTol"></output></label><input type="range" id="bgTol" min="8" max="120" value="40"></div>
+      <div class="row"><label>Outline smoothing <output id="o_smooth"></output></label><input type="range" id="smooth" min="0" max="6" step="0.25" value="1.5"></div>
+      <div class="row"><label>Ignore bits smaller than <output id="o_spk"></output></label><input type="range" id="spk" min="0.5" max="6" step="0.25" value="1.5"></div>
+      <p class="note">Moving these re-traces the picture and replaces any hand edits, so tune them first.</p></details>
+    </div>
+    <div class="tabpane" id="tab-print">
+      <h3>Type</h3>
+      <div class="seg" id="styleSeg"><button data-v="one">One piece</button><button data-v="stamp">Cutter + stamp</button></div>
+      <p class="note" id="styleNote"></p>
+      <div id="stampOpts">
+        <div class="seg" id="effectSeg"><button data-v="groove">Pressed-in lines</button><button data-v="raised">Raised details</button></div>
+      </div>
+      <h3>Size</h3>
+      <div class="num"><span>Longest side (mm)</span><input type="number" id="widthMm" min="20" max="250" step="1"></div>
+      <h3>Dough</h3>
+      <div class="num"><span>Dough thickness (mm)</span><input type="number" id="p_dough" min="3" max="10" step="0.5"></div>
+      <div class="num"><span>Imprint depth (mm)</span><input type="number" id="p_depth" min="0.8" max="4" step="0.1"></div>
+      <details class="more"><summary>Cutter measurements</summary>
+      <div class="row"><label>Line width <output id="o_lineW"></output></label><input type="range" id="lineW" min="1" max="2.2" step="0.05" value="1.3"></div>
+      <p class="note">How wide the pressed lines are. Each size sets a good value by itself.</p>
+      <div class="num"><span>Height (mm)</span><input type="number" id="p_h" min="8" max="30" step="0.5"></div>
+      <div class="num"><span>Blade tip (mm)</span><input type="number" id="p_tip" min="0.6" max="2" step="0.05"></div>
+      <div class="num"><span>Blade base (mm)</span><input type="number" id="p_base" min="0.8" max="3" step="0.1"></div>
+      <div class="num"><span>Top rim width (mm)</span><input type="number" id="p_rimw" min="0" max="8" step="0.5"></div>
+      <div class="num"><span>Stamp fit gap (mm)</span><input type="number" id="p_clear" min="0" max="2" step="0.1"></div>
+      <div class="num"><span>Stamp base (mm)</span><input type="number" id="p_plateT" min="1.5" max="6" step="0.5"></div>
+      </details>
+      <h3>Rules every design follows</h3>
+      <ul class="rules">
+        <li>Thin blade tip for a clean cut, thicker above it so the blade stays stiff</li>
+        <li>No slots narrower than 4 mm, since dough sticks in them</li>
+        <li>No spikes or necks thinner than 5 mm, since they'd snap off the cookie</li>
+        <li>Lines at least 1 mm wide and 2 mm from the edge</li>
+        <li>Big solid areas become outlines</li>
+        <li>Crossbars sit at the top, well above 5 mm dough</li>
+        <li>Files come mirrored, so the cookie isn't backwards</li>
+      </ul>
+      <p class="note">Print in PLA or PETG with 0.2 mm layers, rim side down. No supports needed. 3D prints have tiny gaps between layers, so use food-safe filament, keep dough contact short and wash by hand.</p>
+    </div>
+    <div class="tabpane" id="tab-gallery">
+      <h3>Your name</h3>
+      <input class="textin" id="author" placeholder="So friends know whose cookie it is">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">Shared gallery <button id="dlAll">Download all</button></h3>
+      <div class="status" id="galStatus">Connecting…</div>
+      <div class="grid" id="gallery"></div>
+      <div class="grid" id="starters" hidden></div>
+      <div class="grid" id="starters2" hidden></div>
+    </div>
+  </aside>
+</main>
+</div>
+<div id="toast"></div>
+<script>/*CLIPPER*/</script>
+<script>/*EARCUT*/</script>
+<script>/*THREE*/</script>
+<script>/*ORBIT*/</script>
+<script>/*WASM*/</script>
+<script>/*MANIFOLD*/</script>
+<script>/*DATA*/</script>
+<script>/*APP*/</script>
+</body>
+</html>
