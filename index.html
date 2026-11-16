@@ -9416,7 +9416,7 @@ function traceImage(img, o, lineW){
   const cover=innerN? darkN/innerN : 0;
   let mode=o.src;
   // a painted picture (filled dark and light areas, not drawn lines): Otsu split of the shape into dark and light
-  let regLab=null;
+  let regLab=null, inkMask=null, inkMode=false;
   { const hist=new Float64Array(256); let n=0; for(const i of comps[bi]){ hist[Math.max(0,Math.min(255,L[i]|0))]++; n++; }
     let sum=0; for(let t=0;t<256;t++) sum+=t*hist[t];
     let wB=0,sB=0,best=-1,thr=128,m0=0,m1=0; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=n-wB; if(!wF) break; sB+=t*hist[t];
@@ -9432,6 +9432,30 @@ function traceImage(img, o, lineW){
     ch=nd?ch/nd:0; dl=nd?dl/nd:0;
     if(o.debug){ o.debug.otsu.ch=ch; o.debug.otsu.dl=dl; }
     const painted = (m1-m0)>28 && darkFrac>0.1 && darkFrac<0.9 && fatFrac>0.55 && ch>45 && dl>40;
+    // flat colours inside drawn black outlines: the black lines themselves are the details
+    if(mode==="auto" && painted){ const ik=new Uint8Array(N); let ni=0;
+      for(const i of comps[bi]){ const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); if(0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]<62 && c<75){ ik[i]=1; ni++; } }
+      const dti=distTransform(ik,W,H); let nfat=0; for(const i of comps[bi]) if(ik[i]&&dti[i]>=Math.max(4,1.3*pxPerMM)) nfat++;
+      if(o.debug) o.debug.ink={frac:ni/n, fat:ni?nfat/ni:0};
+      if(ni>n*0.03 && ni<n*0.45 && nfat<ni*0.08){ inkMask=ik; mode="ink"; } }
+    // a shaded illustration: its parts are separated by dark creases (darker than the paint on both sides).
+    // Those creases are the lines to keep; soft shading and highlights are not.
+    if(mode==="auto" && painted && !inkMask && !invert){ const cr=new Uint8Array(N), grey=new Uint8Array(N); let nc=0;
+      const dirs=[[1,0],[0,1],[1,1],[1,-1]], T=o.creaseT||13;
+      for(const s0 of [Math.max(2,Math.round(0.5*pxPerMM)), Math.max(3,Math.round(0.9*pxPerMM))]){
+        for(const i of comps[bi]){ if(cr[i]||grey[i]||!inner[i]) continue; const x=i%W, y=(i-x)/W; if(x<s0||y<s0||x>=W-s0||y>=H-s0) continue;
+          const v=L[i]; let best=0;
+          for(const [dx,dy] of dirs){ const j=(dy*W+dx)*s0; const r=Math.min(L[i+j],L[i-j])-v; if(r>best) best=r; }
+          if(best<T){ // a thin light line drawn across the painting (label leader): remember it so creases can be joined under it
+            let lt=0; for(const [dx,dy] of dirs){ const j=(dy*W+dx)*s0; const r=v-Math.max(L[i+j],L[i-j]); if(r>lt) lt=r; }
+            if(lt>=T && Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i])<34) grey[i]=1; continue; }
+          const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]);
+          if(c<30){ grey[i]=1; continue; }          // grey or black: a label line or lettering, not part of the painting
+          cr[i]=1; nc++; } }
+      // where a label line crosses a crease it leaves a gap: bridge it
+      { const rr=Math.max(2,Math.round(0.8*pxPerMM)); const near=boxFilter(boxFilter(cr,W,H,rr,"dil"),W,H,rr,"ero"); for(let i=0;i<N;i++) if(grey[i]&&near[i]&&!cr[i]) cr[i]=1; }
+      if(o.debug) o.debug.crease={frac:nc/n};
+      if(nc>n*0.02 && nc<n*0.3){ inkMask=cr; mode="ink"; } }
     if(mode==="regions" || (mode==="auto" && painted)){ mode="regions";
       // drop flecks of either colour, then keep the borders between dark and light
       const minR=Math.max(20, n*0.004);
@@ -9447,6 +9471,7 @@ function traceImage(img, o, lineW){
     for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){ const i=y*W+x; if(!inner[i]) continue;
       if((sil[i+1]&&regLab[i]!==regLab[i+1]) || (sil[i+W]&&regLab[i]!==regLab[i+W])) Bd[i]=1; }
     const rr=Math.max(1,Math.round(0.28*pxPerMM)); const dl=boxFilter(Bd,W,H,rr,"dil"); D=new Uint8Array(N); for(let i=0;i<N;i++) D[i]=dl[i]&&inner[i]?1:0;
+  } else if(mode==="ink"){ D=new Uint8Array(N); for(let i=0;i<N;i++) D[i]=inkMask[i]&&inner[i]?1:0; mode="lines"; inkMode=true;
   } else if(mode==="lines"){ // drawn lines, plus colour shapes that have no line around them (dots, spots)
     D=dark.slice(); const near=boxFilter(dark,W,H,Math.max(3,Math.round(hwGuess(dark,W,H)*2+2)),"dil");
     for(let i=0;i<N;i++) if(edge[i] && !near[i]) D[i]=1;
@@ -9470,7 +9495,7 @@ function traceImage(img, o, lineW){
   for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x; const v=dt[i]; if(v<1) continue;
     if(v>=dt[i-1]&&v>=dt[i+1]&&v>=dt[i-W]&&v>=dt[i+W]) ridge.push(v);}
   const hw=Math.max(1, Math.min(median(ridge)||1, Math.max(W,H)/60));
-  const coreT=Math.max(2.2*hw, hw+2.5);
+  const coreT=inkMode? Math.max(4.5*hw, hw+6) : Math.max(2.2*hw, hw+2.5); // where inked lines run together they are still lines, not a filled area
   if(o.debug){o.debug.hw=hw; o.debug.coreT=coreT; o.debug.k=k;}
   const core=new Uint8Array(N); let anyCore=false; for(let i=0;i<N;i++){ if(dt[i]>=coreT){core[i]=1;anyCore=true;} }
   let thinMask=D;
@@ -9677,7 +9702,13 @@ function connectLines(lines, sil, lineW, minLen=1.5, band=0.9, reach=3.2){
     for(const end of [0,1]){ const q= end? p[p.length-1] : p[0]; const r=near(q);
       if(r[0]<snapD){ const dx=r[1]-q[0], dy=r[2]-q[1], L=Math.hypot(dx,dy)||1; const t=[r[1]+dx/L*0.8, r[2]+dy/L*0.8];
         if(end) p.push(t); else p.unshift(t); } }
-    return {p, c:false}; });
+    return {p, c:false, e:[near(p[0])[0]<1.2, near(p[p.length-1])[0]<1.2]}; });
+  // a short tick from a longer line straight to the edge is a leftover (a label line, a hatch mark), not a divider
+  const dTo=(q,l)=>{ let b=Infinity; for(let i=0;i+1<l.p.length;i++){ const r=segDist(q[0],q[1],l.p[i][0],l.p[i][1],l.p[i+1][0],l.p[i+1][1])[0]; if(r<b) b=r; } return b; };
+  ls=ls.filter(l=>{ if(l.c||!l.e||l.e[0]===l.e[1]||plen(l.p)>=4.5) return true;
+    const free=l.e[0]? l.p[l.p.length-1] : l.p[0];
+    return !ls.some(m=>m!==l && plen(m.p)>plen(l.p)*1.5 && dTo(free,m)<lineW+1); });
+  ls=ls.map(l=>({p:l.p,c:!!l.c}));
   return ls.filter(l=>l.c ? plen(l.p.concat([l.p[0]]))>=Math.max(3,minLen) : plen(l.p)>=minLen);
 }
 // Frame: the cookie can be a simple shape with the whole drawing inside it; the figure's own outline
