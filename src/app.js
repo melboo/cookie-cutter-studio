@@ -344,9 +344,38 @@ function traceImage(img, o, lineW){
     for(let i=0;i<N;i++) fg[i]=ext[i]?0:1;
   }
   const gap=Math.max(2,Math.round(Math.max(W,H)*0.005));
-  { const dil=boxFilter(fg,W,H,gap,"dil"); const notDil=new Uint8Array(N); for(let i=0;i<N;i++) notDil[i]=dil[i]?0:1;
-    const ext=floodExterior(notDil,W,H); let sil=new Uint8Array(N); for(let i=0;i<N;i++) sil[i]=ext[i]?0:1;
-    fg=boxFilter(sil,W,H,gap,"ero"); }
+  const shave=Math.max(2,Math.round(Math.max(W,H)*0.008)); // thinner than this cannot survive as dough anyway
+  const closeFill=(m)=>{ const dil=boxFilter(m,W,H,gap,"dil"); const notDil=new Uint8Array(N); for(let i=0;i<N;i++) notDil[i]=dil[i]?0:1;
+    const ext=floodExterior(notDil,W,H); const sl=new Uint8Array(N); for(let i=0;i<N;i++) sl[i]=ext[i]?0:1;
+    return boxFilter(sl,W,H,gap,"ero"); };
+  const biggest=(m)=>{ const c=components(m,W,H,false).comps; if(!c.length) return null; let b=0; c.forEach((x,i)=>{ if(x.length>c[b].length) b=i; }); return c[b]; };
+  fg=closeFill(fg);
+  let subjectMode=false;
+  if(!useAlpha){
+    // Is the "shape" really the whole picture: a frame, a box, a panel? Then look inside it for the painted subject.
+    const big=biggest(fg);
+    let boxy=false;
+    if(big){ let x0=W,x1=0,y0=H,y1=0; for(const i of big){ const x=i%W, y=(i-x)/W; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+      const bw=x1-x0+1, bh=y1-y0+1; boxy = bw>=IW*0.9 && bh>=IH*0.9 && big.length>=bw*bh*0.8; }
+    if(boxy){
+      // the most common colour inside is the panel colour
+      const hist=new Map(); for(let i=0;i<N;i+=2){ if(!fg[i]) continue; const key=((Rb[i]>>4)<<8)|((Gb[i]>>4)<<4)|(Bb[i]>>4); hist.set(key,(hist.get(key)||0)+1); }
+      let bk=0,bn=-1; for(const [k2,n] of hist){ if(n>bn){bn=n;bk=k2;} }
+      const pc=[((bk>>8)&15)*16+8, ((bk>>4)&15)*16+8, (bk&15)*16+8];
+      const thr=Math.max(16,o.bgTol*0.55);
+      const ink=new Uint8Array(N); for(let i=0;i<N;i++){ if(fg[i] && Math.max(Math.abs(Rb[i]-pc[0]),Math.abs(Gb[i]-pc[1]),Math.abs(Bb[i]-pc[2]))>thr) ink[i]=1; }
+      const r=Math.max(3,Math.round(Math.max(W,H)*0.012));
+      const coreC=biggest(boxFilter(ink,W,H,r,"ero"));
+      if(coreC && coreC.length>=IW*IH*0.01){
+        const core=new Uint8Array(N); for(const i of coreC) core[i]=1;
+        const grown=boxFilter(core,W,H,r+1,"dil"); const subj=new Uint8Array(N); let n=0; for(let i=0;i<N;i++){ if(grown[i]&&ink[i]){subj[i]=1;n++;} }
+        if(n>=IW*IH*0.04 && n<=big.length*0.8){ fg=closeFill(subj); subjectMode=true; bg[0]=pc[0]; bg[1]=pc[1]; bg[2]=pc[2]; }
+      }
+    }
+  }
+  // label lines, text and whiskers hanging off the shape would only become spikes
+  { const op=boxFilter(boxFilter(fg,W,H,shave,"ero"),W,H,shave,"dil"); let n0=0,n1=0; for(let i=0;i<N;i++){ n0+=fg[i]; if(op[i]&&fg[i]) n1++; }
+    if(n1>n0*0.5){ for(let i=0;i<N;i++) fg[i]=op[i]&&fg[i]?1:0; } }
   const {lab, comps}=components(fg,W,H,false);
   if(!comps.length) return null;
   let bi=0; comps.forEach((c,i)=>{ if(c.length>comps[bi].length) bi=i; });
@@ -393,9 +422,39 @@ function traceImage(img, o, lineW){
     if(mx>eT) edge[i]=1; }
   const cover=innerN? darkN/innerN : 0;
   let mode=o.src;
+  // a painted picture (filled dark and light areas, not drawn lines): Otsu split of the shape into dark and light
+  let regLab=null;
+  { const hist=new Float64Array(256); let n=0; for(const i of comps[bi]){ hist[Math.max(0,Math.min(255,L[i]|0))]++; n++; }
+    let sum=0; for(let t=0;t<256;t++) sum+=t*hist[t];
+    let wB=0,sB=0,best=-1,thr=128,m0=0,m1=0; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=n-wB; if(!wF) break; sB+=t*hist[t];
+      const a=sB/wB, b2=(sum-sB)/wF, v=wB*wF*(a-b2)*(a-b2); if(v>best){best=v;thr=t;m0=a;m1=b2;} }
+    const dk=new Uint8Array(N); let nd=0; for(const i of comps[bi]){ if(L[i]<=thr){dk[i]=1;nd++;} }
+    const dtd=distTransform(dk,W,H); const fatT=Math.max(3,0.9*pxPerMM); let nf=0; const grownFat=new Uint8Array(N);
+    for(const i of comps[bi]) if(dk[i]&&dtd[i]>=fatT){ grownFat[i]=1; }
+    const gf=boxFilter(grownFat,W,H,Math.ceil(fatT),"dil"); for(const i of comps[bi]) if(dk[i]&&gf[i]) nf++;
+    const darkFrac=nd/n, fatFrac=nd?nf/nd:0;
+    if(o.debug){ o.debug.otsu={thr,m0,m1,darkFrac,fatFrac}; }
+    // drawn black outlines are not paint: the dark areas of a painted picture have colour
+    let ch=0,dl=0; for(const i of comps[bi]) if(dk[i]){ ch+=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); dl+=0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]; }
+    ch=nd?ch/nd:0; dl=nd?dl/nd:0;
+    if(o.debug){ o.debug.otsu.ch=ch; o.debug.otsu.dl=dl; }
+    const painted = (m1-m0)>28 && darkFrac>0.1 && darkFrac<0.9 && fatFrac>0.55 && ch>45 && dl>40;
+    if(mode==="regions" || (mode==="auto" && painted)){ mode="regions";
+      // drop flecks of either colour, then keep the borders between dark and light
+      const minR=Math.max(20, n*0.004);
+      for(const px of components(dk,W,H,true).comps){ if(px.length<minR) for(const i of px) dk[i]=0; }
+      const lt=new Uint8Array(N); for(const i of comps[bi]) if(!dk[i]) lt[i]=1;
+      for(const px of components(lt,W,H,false).comps){ if(px.length<minR) for(const i of px) dk[i]=1; }
+      regLab=dk; }
+  }
   if(mode==="auto") mode = cover>0.004 ? "lines" : "edges";
   let D;
-  if(mode==="lines"){ // drawn lines, plus colour shapes that have no line around them (dots, spots)
+  if(mode==="regions"){
+    const Bd=new Uint8Array(N);
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){ const i=y*W+x; if(!inner[i]) continue;
+      if((sil[i+1]&&regLab[i]!==regLab[i+1]) || (sil[i+W]&&regLab[i]!==regLab[i+W])) Bd[i]=1; }
+    const rr=Math.max(1,Math.round(0.28*pxPerMM)); const dl=boxFilter(Bd,W,H,rr,"dil"); D=new Uint8Array(N); for(let i=0;i<N;i++) D[i]=dl[i]&&inner[i]?1:0;
+  } else if(mode==="lines"){ // drawn lines, plus colour shapes that have no line around them (dots, spots)
     D=dark.slice(); const near=boxFilter(dark,W,H,Math.max(3,Math.round(hwGuess(dark,W,H)*2+2)),"dil");
     for(let i=0;i<N;i++) if(edge[i] && !near[i]) D[i]=1;
   } else D = mode==="edges"? edge : new Uint8Array(N);
@@ -474,7 +533,7 @@ function traceImage(img, o, lineW){
   const blobs=inter(blobsMM.length?union(blobsMM):[], offset([silMM],-RULES.edge,0.04)).filter(p=>Math.abs(area(p))>=RULES.minArea).map(p=>dpClosed(p,0.04));
   if(o.debug){o.debug.blobsMM=blobsMM.length; o.debug.blobs=blobs.length;}
   const imgX={k:k*sc, tx:(pad-cx)*k, ty:(pad-cy)*k};
-  return {outline, lines, blobs, imgX, info:{mode, cover, useAlpha, bg, dropped}};
+  return {outline, lines, blobs, imgX, info:{mode, cover, useAlpha, bg, dropped, subject:subjectMode}};
 }
 
 /* =====================================================================
@@ -790,6 +849,7 @@ function renderCheck(fixes, warns, has, R){
   c.innerHTML=`<b>${head}</b><button class="x" aria-label="Hide this">×</button>`+(line?`<span${has&&k.tips.some(t=>t[0]==="warn")?' class="warn"':''}></span>`:"");
   if(line) c.lastChild.textContent=line;
   c.querySelector(".x").onclick=()=>{ checkShut=true; render(); };
+  if(has && aiCanRemove()){ const b=document.createElement("button"); b.className="act"; b.textContent=`Remove ${aiResult.remove.length} extra line${aiResult.remove.length>1?"s":""}`; b.onclick=aiRemove; c.appendChild(b); }
 }
 function selObj(){ if(!sel) return null; if(sel.kind==="outline") return {p:design.outline,c:true}; if(sel.kind==="line") return design.lines[sel.i]; if(sel.kind==="blob") return {p:design.blobs[sel.i],c:true}; if(sel.kind==="hole") return design.holes[sel.i]?{p:design.holes[sel.i],c:true}:null; return null; }
 function renderNodes(){
@@ -1141,7 +1201,8 @@ function runTrace(){
   if(sizeObj()) fitReady(design, sizeMM());
   const i=r.info; const parts=[];
   parts.push(i.useAlpha?"Transparent background found.":"Background colour found.");
-  parts.push(i.mode==="lines"?"Details came from the drawn lines.": i.mode==="edges"?"No drawn lines, so details came from colour edges.":"No stamp details.");
+  if(i.subject) parts.push("Found the picture inside its frame.");
+  parts.push(i.mode==="lines"?"Details came from the drawn lines.": i.mode==="regions"?"A painted picture, so details are the borders between dark and light areas.": i.mode==="edges"?"No drawn lines, so details came from colour edges.":"No stamp details.");
   if(i.dropped) parts.push(`${i.dropped} separate part${i.dropped>1?"s were":" was"} left out, since a cutter is one shape.`);
   setTraceNote(parts.join(" "));
   sel=null; selNode=-1; render(); markDirty();
@@ -1388,7 +1449,8 @@ async function aiCheck(){
   if(!R.outline.length) return;
   aiBusy=true; aiResult=null; const out=$("aiOut"); out.innerHTML='<div class="ctip">Cookie Monster AI is looking at your cookie…</div>';
   const bb=bbox([R.outline]); const info=design.lines.map((l,i)=>({id:i+1, mm:Math.round(plen(l.p)), loop:!!l.c}));
-  const prompt=`Someone is designing a cookie cutter to 3D print. ${sampleImg?"The image shows their design: the tan shape is the cookie, white areas inside it are holes cut through, dark lines and dark filled areas get pressed into the dough. Each line carries a pink number.":"You cannot see the design, only these facts about it."}
+  const hasSrc=!!(sampleImg && srcImage && design.img);
+  const prompt=`Someone is designing a cookie cutter to 3D print. ${sampleImg?"The image shows their design: the tan shape is the cookie, white areas inside it are holes cut through, dark lines and dark filled areas get pressed into the dough. Each line carries a pink number."+(hasSrc?" The second image is the picture they uploaded, which the design was traced from. Traced lines that do not follow a real feature of that picture (leftovers of text, label lines, shading, noise) are clutter.":""):"You cannot see the design, only these facts about it."}
 The cookie is ${Math.round(bb.w)} x ${Math.round(bb.h)} mm. Holes: ${(R.holes||[]).length}. Pressed areas or dots: ${(design.blobs||[]).length}. Lines (id, length in mm, whether it is a closed loop): ${JSON.stringify(info)}
 What makes the best cutters: the cookie outline is smooth and chunky with nothing thinner than 5 mm; the inside is divided into a few big rounded areas; about 6 to 12 bold lines; lines end on the edge or on another line; one or two tiny marks at most; repeated lines only for one texture such as hair.
 Reply with only a JSON object:
@@ -1398,23 +1460,27 @@ Reply with only a JSON object:
  "tips": up to 3 specific suggestions that refer to parts of THIS drawing and that the person would change by hand, each under 9 words, plain everyday words, no jargon}
 Example: {"subject":"cat face","name":"Sleepy Cat","remove":[7,9],"tips":["Make the ears wider at the base."]}`;
   try{
-    const opts={modelTier:"default"}; if(sampleImg){ const png=await designPNG(true); if(png) opts.images=[png]; }
+    const opts={modelTier:"default"}; if(sampleImg){ const png=await designPNG(true); if(png){ opts.images=[png]; if(hasSrc){ const sp=await srcPNG(); if(sp) opts.images.push(sp); } } }
     const r=await sample.json(prompt, opts); aiGranted=true;
     const n=design.lines.length; const rem=[...new Set((Array.isArray(r&&r.remove)?r.remove:[]).map(Number).filter(x=>Number.isInteger(x)&&x>=1&&x<=n))].slice(0,Math.floor(n/2));
     const tips=(Array.isArray(r&&r.tips)?r.tips:[]).map(String).filter(Boolean).slice(0,3);
     aiResult={subject:String(r&&r.subject||"").slice(0,40), name:String(r&&r.name||"").replace(/[<>]/g,"").slice(0,40), remove:rem, tips, key:JSON.stringify(design.lines.length)};
     const cur=($("name").value||"").trim(); if(aiResult.name && (!cur || /^untitled/i.test(cur) || design.autoNamed)){ $("name").value=aiResult.name; design.name=aiResult.name; design.autoNamed=true; }
-    renderAI();
+    renderAI(); render();
   }catch(e){ const msg=aiFail(e); out.innerHTML= msg?`<div class="ctip warn"></div>`:""; if(msg) out.firstChild.textContent=msg; }
   finally{ aiBusy=false; }
 }
+function srcPNG(){ try{ const S=720, w=srcImage.naturalWidth, h=srcImage.naturalHeight, k=Math.min(1,S/Math.max(w,h)); const cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(w*k)); cv.height=Math.max(1,Math.round(h*k)); const g=cv.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height); g.drawImage(srcImage,0,0,cv.width,cv.height); return new Promise(res=>cv.toBlob(res,"image/png")); }catch(e){ return Promise.resolve(null); } }
+function aiCanRemove(){ const a=aiResult; return !!(a && a.remove.length && a.key===JSON.stringify(design.lines.length)); }
+function aiRemove(){ const a=aiResult; if(!a||!a.remove.length) return; if(!aiCanRemove()){ toast("The drawing changed. Cookie Monster AI will look again."); return; }
+  pushHist(); design.sketch=[]; const kill=new Set(a.remove.map(x=>x-1)); design.lines=design.lines.filter((l,i)=>!kill.has(i)); a.remove=[]; sel=null; render(); markDirty(); aiLastKey=aiKey(); renderAI(); toast("Removed. Undo brings them back."); }
 function renderAI(){
   const out=$("aiOut"); out.innerHTML=""; const a=aiResult; if(!a) return;
   const add=(cls,txt)=>{ const d=document.createElement("div"); d.className="ctip "+cls; d.textContent=txt; out.appendChild(d); return d; };
   if(a.subject) add("ok", "Cookie Monster AI sees: "+a.subject+(a.name?". Named it “"+a.name+"”.":""));
   a.tips.forEach(t=>add("",t));
   if(a.remove.length){ const b=document.createElement("button"); b.className="primary"; b.style.marginTop="6px"; b.textContent=`Remove ${a.remove.length} cluttering line${a.remove.length>1?"s":""}`;
-    b.onclick=()=>{ if(JSON.stringify(design.lines.length)!==a.key){ toast("The drawing changed. Cookie Monster AI will look again."); return; } pushHist(); design.sketch=[]; const kill=new Set(a.remove.map(x=>x-1)); design.lines=design.lines.filter((l,i)=>!kill.has(i)); a.remove=[]; sel=null; render(); markDirty(); aiLastKey=aiKey(); renderAI(); toast("Removed. Undo brings them back."); };
+    b.onclick=aiRemove;
     out.appendChild(b); }
   if(!a.tips.length && !a.remove.length) add("ok","Nothing to fix. This is a good cookie.");
   if(innerWidth<=860 && !a.shown){ a.shown=true; toast("Cookie Monster AI: "+(a.tips[0]||(a.subject?"I see "+a.subject+". Looks good.":"Looks good."))); }

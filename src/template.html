@@ -61,6 +61,7 @@ main{display:grid;grid-template-columns:72px 1fr 350px;min-height:0}
 #check .x{position:absolute;top:2px;right:2px;width:34px;height:34px;padding:0;border:0;box-shadow:none;background:transparent;font-size:22px;line-height:1;font-weight:900}
 #check .x:hover{background:var(--ink);color:var(--pop)}
 #check .x:active{transform:none}
+#check .act{display:block;margin-top:6px;font-size:12px;padding:5px 9px;background:#fff;box-shadow:2px 2px 0 var(--ink);text-transform:none}
 #check.shut{padding:0;transform:none;background:transparent;border:0;box-shadow:none}
 #check .chip{width:44px;height:44px;padding:0;background:var(--pop);font-size:20px;font-weight:900}
 #check span{display:block;font-family:var(--mono);font-weight:400;text-transform:none;font-size:12px;margin-top:3px;color:var(--ink)}
@@ -242,7 +243,7 @@ header .sm{display:none}
       </ul></details>
       <details class="more" id="traceMore" hidden><summary>Adjust how the picture was traced</summary>
       <div class="row"><label for="detSrc">Stamp details from</label>
-        <select id="detSrc" class="textin"><option value="auto">Automatic</option><option value="lines">Drawn lines</option><option value="edges">Colour edges</option><option value="none">No details (cutter only)</option></select></div>
+        <select id="detSrc" class="textin"><option value="auto">Automatic</option><option value="lines">Drawn lines</option><option value="edges">Colour edges</option><option value="regions">Colour areas</option><option value="none">No details (cutter only)</option></select></div>
       <div class="row"><label for="detLevel">Detail level</label>
         <select id="detLevel" class="textin"><option value="7">Bold: only long lines that shape the cookie</option><option value="3.5" selected>Balanced</option><option value="1">Fine: keep every little line</option></select></div>
       <div class="row"><label>Detail sensitivity <output id="o_sens"></output></label><input type="range" id="sens" min="0" max="1" step="0.05" value="0.5"></div>
