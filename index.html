@@ -9601,13 +9601,31 @@ function cutterReady(d){
       // an uploaded drawing: press its own ink into the dough, as drawn. Its outer outline is the blade, so that band is left out,
       // and lines that ran into the outline are led on to the blade.
       if(d.art && d.art.real && d.art.ink.length && !extraLines.length){ try{
-        const t=d.art.w*1.6+0.3, core=offset([O2], -t, 0.04);
+        // how thick the drawing's strokes really are: area / half the perimeter
+        let per=0; for(const p of d.art.ink) per+=plen(p.concat([p[0]])); const sw=per>0? 2*netArea(d.art.ink)/per : d.art.w;
+        const t=Math.max(d.art.w, sw)*1.2+0.3, core=offset([O2], -t, 0.04);
         let ink=inter(d.art.ink, core);
         ink=offset(offset(ink,-0.25,0.03),0.25,0.03);
-        const band=diff([O2], core);
-        const reach=inter(strokeLines(d.lines, Math.max(w, d.art.w*1.25)), band);
+        // keep only ink that belongs to a line or dot of the drawing: scraps of the outline band go
+        { const own=union(strokeLines(d.lines, Math.max(d.art.w,sw)*3.2).concat((d.blobs&&d.blobs.length)?offset(d.blobs,1,0.04):[])); if(own.length) ink=inter(ink, own); ink=offset(offset(ink,-0.25,0.03),0.25,0.03); }
+        // a line that ran into the outline is carried straight on to the blade, in its own direction
+        const reachL=[]; { const dE=q=>{ let b=Infinity; for(let i=0;i<O2.length;i++){ const A=O2[i],B=O2[(i+1)%O2.length]; const r=segDist(q[0],q[1],A[0],A[1],B[0],B[1])[0]; if(r<b) b=r; } return pointInPoly(q,O2)? b : -b; };
+          for(const l of d.lines){ if(l.c||l.p.length<2) continue;
+            for(const e of [0,1]){ const p=e? l.p.slice().reverse() : l.p; if(dE(p[0])>1.6) continue;      // this end was not at the edge
+              let i=0; while(i<p.length-1 && dE(p[i])<t+0.1) i++; if(dE(p[i])<t+0.1) continue;
+              let j=i, run=0; while(j<p.length-1 && run<2.5){ run+=Math.hypot(p[j+1][0]-p[j][0],p[j+1][1]-p[j][1]); j++; }
+              const dx=p[i][0]-p[j][0], dy=p[i][1]-p[j][1], L=Math.hypot(dx,dy); if(L<0.3) continue;
+              let q=p[i].slice(), k2=0; const st=0.25; while(dE(q)>-0.3 && k2++<Math.ceil((3*t+2)/st)) q=[q[0]+dx/L*st, q[1]+dy/L*st];
+              if(k2<Math.ceil((3*t+2)/st)) reachL.push({p:[p[i],q],c:false}); } } }
+        // close to the edge only the line itself stays: fillets and scraps of the outline go
+        { const rimZone=diff([O2], offset([O2], -(t+1.4), 0.04)); const narrow=union(strokeLines(d.lines, sw*1.15));
+          ink=union(diff(ink, rimZone).concat(inter(inter(ink, rimZone), narrow))); ink=offset(offset(ink,-0.25,0.03),0.25,0.03); }
+        const reach=reachL.length? inter(strokeLines(reachL, Math.max(RULES.minLine, sw*0.95)), diff([O2], offset([O2], -(t+0.5), 0.04))) : [];
         const thin=strokeLines(d.lines, RULES.minLine);             // nothing thinner than can be printed
-        det=union(ink.concat(reach, inter(thin, offset(ink,0.2,0.04)))); }catch(err){ console.warn(err); } }
+        det=union(ink.concat(reach, inter(thin, offset(ink,0.2,0.04))));
+        // lines that all but touch are pressed as one
+        det=offset(offset(det, 0.3, 0.04), -0.3, 0.04);
+        det=offset(offset(det,-0.2,0.03),0.2,0.03); }catch(err){ console.warn(err); } }
       if(det.length && holes.length) det=diff(det, offset(holes, 1.2, 0.04));
       if(det.length){
         const fat=exPolys(offset(offset(det,-1.8,0.03),1.8,0.03)).filter(e=>exArea(e)>RULES.bigFill);
@@ -9750,7 +9768,7 @@ function fitSize(d, mm){
   const f=q=>[(q[0]-cx)*s,(q[1]-cy)*s];
   d.outline=d.outline.map(f); d.lines=d.lines.map(l=>({p:l.p.map(f),c:l.c})); d.blobs=d.blobs.map(p=>p.map(f)); if(d.sketch) d.sketch=d.sketch.map(l=>({...l,p:l.p.map(f)})); if(d.holes) d.holes=d.holes.map(p=>p.map(f));
   if(d.img){const x=d.img; x.tx=(x.tx-cx)*s; x.ty=(x.ty-cy)*s; x.k*=s;}
-  if(d.art){ d.art.ink=d.art.ink.map(p=>p.map(f)); d.art.w*=s; d.art.resnap=true; d.art.v++; }
+  if(d.art){ d.art.ink=d.art.ink.map(p=>p.map(f)); if(d.art.fills) d.art.fills=d.art.fills.map(x=>({c:x.c,p:x.p.map(p=>p.map(f))})); d.art.w*=s; d.art.resnap=true; d.art.v++; }
 }
 function fitReady(d, mm){
   fitSize(d, mm);
@@ -9760,9 +9778,9 @@ function fitReady(d, mm){
 function applySizeDefaults(d, z){ if(!z) return; d.lineW=z.lineW; d.print.h=z.h; d.print.style=z.style; }
 
 /* ---------------- history ---------------- */
-function snap(){return JSON.stringify({o:design.outline,l:design.lines,b:design.blobs,w:design.lineW,img:design.img,s:design.sketch||[],h:design.holes||[],a:design.art?{ink:design.art.ink,w:design.art.w,real:design.art.real}:null});}
+function snap(){return JSON.stringify({o:design.outline,l:design.lines,b:design.blobs,w:design.lineW,img:design.img,s:design.sketch||[],h:design.holes||[],a:design.art?{ink:design.art.ink,w:design.art.w,real:design.art.real,fills:design.art.fills||null}:null});}
 function pushHist(){hist.push(snap()); if(hist.length>120) hist.shift(); future=[]; updUndo();}
-function restore(s){const v=JSON.parse(s); design.outline=v.o; design.lines=v.l; design.blobs=v.b; design.lineW=v.w; design.img=v.img; design.sketch=v.s||[]; design.holes=v.h||[]; design.art=v.a?{ink:v.a.ink,w:v.a.w,real:v.a.real,v:(artV++),resnap:true}:null; sel=null; selNode=-1; syncLineW(); render(); markDirty();}
+function restore(s){const v=JSON.parse(s); design.outline=v.o; design.lines=v.l; design.blobs=v.b; design.lineW=v.w; design.img=v.img; design.sketch=v.s||[]; design.holes=v.h||[]; design.art=v.a?{ink:v.a.ink,w:v.a.w,real:v.a.real,fills:v.a.fills||null,v:(artV++),resnap:true}:null; sel=null; selNode=-1; syncLineW(); render(); markDirty();}
 function undo(){if(!hist.length)return; future.push(snap()); restore(hist.pop()); updUndo();}
 function redo(){if(!future.length)return; hist.push(snap()); restore(future.pop()); updUndo();}
 function updUndo(){$("undo").disabled=!hist.length; $("redo").disabled=!future.length;}
@@ -9847,9 +9865,10 @@ function artSync(){
   const added=cur.filter(k=>!had.has(k)).map(k=>{const v=JSON.parse(k); return {p:v[0],c:v[1]};});
   const remB=a.bSnap.filter(k=>!hasB.has(k)).map(k=>JSON.parse(k)), addB=curB.filter(k=>!hadB.has(k)).map(k=>JSON.parse(k));
   if(removed.length||added.length||remB.length||addB.length){
-    try{ const w=a.w; let ink=a.ink;
+    try{ let per=0; for(const p of a.ink) per+=plen(p.concat([p[0]])); const w=Math.max(a.w, per>0? 2*netArea(a.ink)/per : 0); let ink=a.ink;
       const rem=union(strokeLines(removed,w*1.3+0.9).concat(remB.length?offset(remB,0.5,0.04):[]));
-      if(rem.length){ let cut=added.length? diff(rem, union(strokeLines(added,w+0.9))) : rem;
+      if(rem.length){ let cut=added.length? diff(rem, union(strokeLines(added,w*1.3+1.3))) : rem;
+        cut=offset(offset(cut,-0.35,0.04),0.35,0.04);   // a line that only moved a hair is not a removal
         if(a.real) cut=inter(cut, offset([design.outline], -(Math.max(w,1.5)*1.4), 0.04)); // the outer outline of the drawing is never cut
         if(cut.length){ const others=design.lines.filter(l=>!added.some(x=>x.p===l.p));
           const heal=inter(union(strokeLines(design.lines,w*0.85)), cut);
@@ -9857,8 +9876,9 @@ function artSync(){
           // crumbs of the removed line that the cut left behind go too
           const nearCut=offset(cut, w*1.5, 0.05); const keep=[];
           for(const e of exPolys(ink)){ if(exArea(e) < 8*w*w && netArea(inter([e.outer], nearCut)) > 0.5*Math.abs(area(e.outer))) continue; keep.push(e); }
-          ink=flatEx(keep); } }
-      let add=strokeLines(added,w).concat(addB);
+          ink=flatEx(keep);
+          const zone=inter(ink, nearCut); if(zone.length){ const r=0.32*w; ink=union(diff(ink, nearCut).concat(offset(offset(zone,-r,0.03),r,0.03))); } } }
+      let add=a.noAdd? [] : strokeLines(added,w).concat(addB);   // tidying a fresh trace only ever takes ink away
       if(add.length){ add=inter(union(add), [design.outline]); ink=union(ink.concat(add)); } // nothing pokes out of the drawing
       a.ink=ink.filter(p=>Math.abs(area(p))>=0.2); a.v=(artV++);
     }catch(err){ console.warn(err); }
@@ -9869,7 +9889,7 @@ function artSync(){
 // The drawing keeps the picture's colours: each area between the lines is filled with the colour found there.
 let regKey="", regVal=[], regPix=null, regPixSrc=null;
 function regionFills(R, art){
-  if(!design.img || !srcImage || !R.outline || !R.outline.length) return [];
+  if(!design.img || !srcImage || !R.outline || !R.outline.length) return art&&art.fills ? art.fills.map(f=>({d:pathD(f.p), fill:f.c})) : [];
   const key=readyKey+"|"+srcURL.length+"|"+JSON.stringify(design.img)+"|"+(art?art.v+":"+art.ink.length:"-");
   if(key===regKey) return regVal;
   if(regPixSrc!==srcImage){ const iw=srcImage.naturalWidth, ih=srcImage.naturalHeight, sc=Math.min(1,420/Math.max(iw,ih));
@@ -9892,7 +9912,8 @@ function regionFills(R, art){
       if(0.299*r+0.587*g2+0.114*b<50) continue;      // drawn ink, not paint
       rs.push(r); gs.push(g2); bs.push(b); }
     if(rs.length<2) continue;
-    out.push({d:pathD([e.outer].concat(e.holes)), fill:`rgb(${med(rs)},${med(gs)},${med(bs)})`}); }
+    out.push({d:pathD([e.outer].concat(e.holes)), fill:`rgb(${med(rs)},${med(gs)},${med(bs)})`, p:[e.outer].concat(e.holes)}); }
+  if(art) art.fills=out.map(f=>({c:f.fill, p:f.p}));
   regKey=key; regVal=out; return out;
 }
 let fastRender=false;
@@ -10318,6 +10339,7 @@ function runTrace(){
   if(sizeObj()) fitReady(design, sizeMM());
   artSync();
   { const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }
+  if(design.art){ design.art.noAdd=true; artSync(); design.art.noAdd=false; }
   if(!design.art){ try{ const lw=design.lineW, O=design.outline;
       const ring=diff([O], offset([O], -1.25*lw, 0.04));
       design.art={ink:inter(union(strokeLines(design.lines,lw).concat(design.blobs, ring)), [O]), w:lw, v:0, real:false, resnap:true}; }catch(err){ console.warn(err); design.art=null; } }
@@ -10343,6 +10365,19 @@ function simplifyDrawing(lines, outline, w){
   const tie=w+0.9, reach=4.5;
   for(const l of ls){ if(l.c||l.p.length<4) continue; const a=l.p[0], b=l.p[l.p.length-1]; if(plen(l.p)>=4 && Math.hypot(a[0]-b[0],a[1]-b[1])<=2.6) l.c=true; } // a small ring left open
   const ends=l=>[0,1].map(e=>{ const q=e? l.p[l.p.length-1] : l.p[0]; const a=nearEdge(q), b=nearLine(q,l,e); return {q, d:Math.min(a[0],b[0]), to:a[0]<=b[0]?a:b}; });
+  // one line broken in two, each half bent to the edge (a label line crossed it): make it one line again
+  { let merged=true, guard=0; while(merged && guard++<20){ merged=false;
+      outer: for(let i=0;i<ls.length;i++){ const A=ls[i]; if(A.c||plen(A.p)<6) continue;
+        for(let j=i+1;j<ls.length;j++){ const B=ls[j]; if(B.c||plen(B.p)<6) continue;
+          for(const ea of [0,1]) for(const eb of [0,1]){
+            const trim=(l,e)=>{ let p=l.p.slice(); if(e===0) p.reverse(); while(p.length>3 && nearEdge(p[p.length-1])[0]<1.3) p.pop(); return p; }; // p ends at the joint
+            const pa=trim(A,ea===0?0:1), pb=trim(B,eb===0?0:1); const qa=pa[pa.length-1], qb=pb[pb.length-1];
+            if(pa.length===A.p.length && pb.length===B.p.length) continue;            // neither end was bent to the edge
+            const gap=Math.hypot(qa[0]-qb[0],qa[1]-qb[1]); if(gap>5.5) continue;
+            const ta=pa[Math.max(0,pa.length-4)], tb=pb[Math.max(0,pb.length-4)];
+            const ux=qa[0]-ta[0], uy=qa[1]-ta[1], vx=tb[0]-qb[0], vy=tb[1]-qb[1]; const cu=(ux*vx+uy*vy)/((Math.hypot(ux,uy)||1)*(Math.hypot(vx,vy)||1));
+            if(cu<0.45) continue;                                                      // they do not continue each other
+            ls[i]={p:pa.concat(pb.slice().reverse()), c:false}; ls.splice(j,1); merged=true; break outer; } } } } }
   for(let pass=0;pass<3;pass++){
     // lead long loose ends home
     for(const l of ls){ if(l.c) continue; const L=plen(l.p); const en=ends(l);
@@ -10735,7 +10770,8 @@ function markDirty(){ updUndo(); if(typeof scheduleAI==="function") scheduleAI()
 const encPoly=p=>p.map(q=>r2(q[0])+","+r2(q[1])).join(" ");
 const decPoly=s=>String(s||"").trim().split(/\s+/).filter(Boolean).map(t=>t.split(",").map(Number)).filter(q=>q.length===2&&q.every(isFinite));
 function encode(d){return {name:(d.name||"Untitled").slice(0,60), author:($("author").value||"").slice(0,40), outline:encPoly(d.outline),
-  lines:d.lines.map(l=>(l.c?"c ":"")+encPoly(l.p)), blobs:d.blobs.map(encPoly), holes:(d.holes||[]).map(encPoly), lineW:d.lineW, frame:d.frame||"figure", print:{...d.print}, size:d.sizeKey||sizeKey, updatedAt:Date.now()};}
+  lines:d.lines.map(l=>(l.c?"c ":"")+encPoly(l.p)), blobs:d.blobs.map(encPoly), holes:(d.holes||[]).map(encPoly), lineW:d.lineW, frame:d.frame||"figure", print:{...d.print}, size:d.sizeKey||sizeKey, updatedAt:Date.now(),
+  art: d.art && d.art.ink && d.art.ink.length<=400 ? {w:r2(d.art.w), real:!!d.art.real, ink:d.art.ink.map(encPoly), fills:(d.art.fills||[]).slice(0,60).map(f=>({c:f.c, p:f.p.map(encPoly)}))} : null};}
 function decode(id, o){
   const d=blankDesign(); d.id=id; d.name=String(o.name||"Untitled"); d.author=String(o.author||"");
   try{
@@ -10744,6 +10780,9 @@ function decode(id, o){
     d.blobs=(Array.isArray(o.blobs)?o.blobs:Array.isArray(o.details)?o.details:[]).map(decPoly).filter(p=>p.length>=3);
     d.holes=(Array.isArray(o.holes)?o.holes:[]).map(decPoly).filter(p=>p.length>=3);
   }catch(e){}
+  try{ if(o.art && Array.isArray(o.art.ink) && typeof o.art.w==="number"){ const ink=o.art.ink.map(decPoly).filter(p=>p.length>=3);
+      const fills=(Array.isArray(o.art.fills)?o.art.fills:[]).map(f=>({c:/^rgb\(\d{1,3},\d{1,3},\d{1,3}\)$/.test(String(f.c))?String(f.c):"#fff", p:(Array.isArray(f.p)?f.p:[]).map(decPoly).filter(p=>p.length>=3)})).filter(f=>f.p.length);
+      if(ink.length) d.art={ink, w:o.art.w, real:!!o.art.real, fills, v:(artV++), resnap:true}; } }catch(e){}
   if(typeof o.lineW==="number" && o.lineW>0.3 && o.lineW<5) d.lineW=o.lineW;
   if(["figure","circle","oval","plaque"].includes(o.frame)) d.frame=o.frame;
   if(o.print && typeof o.print==="object") for(const k in DEFAULT_PRINT){ if(typeof o.print[k]===typeof DEFAULT_PRINT[k]) d.print[k]=o.print[k]; }
