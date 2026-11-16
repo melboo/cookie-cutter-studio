@@ -492,13 +492,13 @@ function cutterReady(d){
     if(O && Math.abs(area(O))>20){
       const a0=Math.abs(area(O));
       let O1=largest(offset(offset([O],RULES.notch,0.04),-RULES.notch,0.04))||O;
-      if(Math.abs(area(O1))-a0>1.5) fixes.push("filled slots too narrow for dough");
+      if(Math.abs(area(O1))-a0>1.5) fixes.push("filled narrow slots");
       let O2=largest(offset(offset([O1],-RULES.neck,0.04),RULES.neck,0.04));
       if(!O2 || Math.abs(area(O2))<0.5*Math.abs(area(O1))) O2=O1;
-      else if(Math.abs(area(O1))-Math.abs(area(O2))>1.5) fixes.push("rounded spikes that would snap off");
+      else if(Math.abs(area(O1))-Math.abs(area(O2))>1.5) fixes.push("rounded thin parts");
       O2=dpClosed(O2,0.04);
       const w=Math.max(RULES.minLine, d.lineW||1.2);
-      if((d.lineW||0)<RULES.minLine) fixes.push("lines widened to 1 mm");
+      if((d.lineW||0)<RULES.minLine) fixes.push("widened lines");
       // holes: cut right through. Each gets its own blade, held by the crossbars. Keep a 5 mm wall of cookie around them.
       let holes=[];
       if(d.holes && d.holes.length){
@@ -506,7 +506,7 @@ function cutterReady(d){
         let hs=inter(raw, offset([O2], -2*RULES.neck, 0.04));
         hs=offset(offset(hs,-RULES.notch,0.04),RULES.notch,0.04).filter(p=>Math.abs(area(p))>12);
         hs=union(hs).filter(p=>area(p)>0);
-        if(Math.abs(netArea(raw)-netArea(hs))>1.5) fixes.push(hs.length?"kept holes 5 mm away from the edge":"a hole was too small or too close to the edge to cut");
+        if(Math.abs(netArea(raw)-netArea(hs))>1.5) fixes.push(hs.length?"moved a hole off the edge":"dropped a hole that was too small");
         holes=hs.map(p=>dpClosed(p,0.04));
       }
       let det=union(strokeLines(d.lines.concat(extraLines),w).concat(d.blobs||[]));
@@ -517,7 +517,7 @@ function cutterReady(d){
           // a big solid stamp sticks and squashes the dough, so it becomes an outline filled with stripes: it still reads as an area
           const fb=bbox(F), sw=Math.max(1,w*0.9)*Math.SQRT2, pitch=(Math.max(1,w*0.9)+1.7)*Math.SQRT2, hh=fb.h+2, stripes=[];
           for(let c=fb.x0-hh-1; c<fb.x1+1; c+=pitch) stripes.push([[c,fb.y0-1],[c+sw,fb.y0-1],[c+sw+hh,fb.y1+1],[c+hh,fb.y1+1]]);
-          det=union(diff(det,F).concat(diff(F, offset(F,-RULES.ringW,0.03))).concat(inter(stripes,F))); fixes.push("big pressed areas given stripes so they release from the dough"); }
+          det=union(diff(det,F).concat(diff(F, offset(F,-RULES.ringW,0.03))).concat(inter(stripes,F))); fixes.push("striped big areas"); }
         const before=netArea(det);
         // creases may run into the outline: there they join the blade (which also braces the cutter).
         // For the separate stamp, everything stays on the stamp plate.
@@ -525,7 +525,7 @@ function cutterReady(d){
         // drop slivers left between a line and the edge
         det=offset(offset(det,-0.3,0.03),0.3,0.03);
         const ex=exPolys(det); const kept=ex.filter(e=>exArea(e)>=RULES.minArea);
-        if(kept.length<ex.length) fixes.push("removed specks too small to print");
+        if(kept.length<ex.length) fixes.push("removed specks");
         det=flatEx(kept).map(p=>dpClosed(p,0.03)).filter(p=>p.length>=3);
         const closed=offset(offset(det,RULES.crowd,0.05),-RULES.crowd,0.05);
         if(!fat.length && netArea(closed)-netArea(det)>4) warns.push("some lines are very close together, so the dough between them may blur");
@@ -775,15 +775,21 @@ function renderFrame(){
   el("rect",{x:cx-h,y:cy-h,width:z.mm,height:z.mm,rx:4,fill:"none",stroke:"#ff4f9a","stroke-width":1,"stroke-dasharray":"6 5","vector-effect":"non-scaling-stroke",opacity:.5},layers.frame);
   const t=el("text",{x:cx-h,y:cy-h-z.mm*0.015,fill:"#111","font-size":z.mm*0.035,"font-family":"Space Mono,monospace",opacity:.85},layers.frame); t.textContent=`${z.label} · ${z.mm/10} cm`;
 }
+let checkShut=false;
 function renderCheck(fixes, warns, has, R){
   const c=$("check"); const k=coach(R||{outline:[]});
-  if(!has){ if(SK().length){ c.style.display=""; c.innerHTML="<b>Keep going</b><span>Bring the line back round to where it started, or let me wrap a cookie around it (button top left).</span>"; } else c.style.display="none"; return; }
+  if(!has && !SK().length){ c.style.display="none"; return; }
   c.style.display="";
-  let h="<b>✓ Works as a cutter</b>";
-  const fx=(sketchInfo.auto&&SK().length?[sketchInfo.auto]:[]).concat(fixes);
-  if(fx.length) h+=`<span>Done for you: ${fx.join(", ")}.</span>`;
-  const w=k.tips.find(t=>t[0]!=="ok"); if(w) h+=`<span class="warn">Tip: ${w[1]}</span>`;
-  c.innerHTML=h;
+  const head = has ? "✓ Works" : "Keep going";
+  let line="";
+  if(!has) line="Close the shape.";
+  else { const w=k.tips.find(t=>t[0]!=="ok"); const fx=(sketchInfo.auto&&SK().length?[sketchInfo.auto]:[]).concat(fixes).slice(0,2);
+    line = w ? w[1] : fx.length ? "Fixed: "+fx.join(", ")+"." : ""; }
+  c.classList.toggle("shut", checkShut);
+  if(checkShut){ c.innerHTML=`<button class="chip" aria-label="Show cutter check">${has?"✓":"…"}</button>`; c.firstChild.onclick=()=>{ checkShut=false; render(); }; return; }
+  c.innerHTML=`<b>${head}</b><button class="x" aria-label="Hide this">×</button>`+(line?`<span${has&&k.tips.some(t=>t[0]==="warn")?' class="warn"':''}></span>`:"");
+  if(line) c.lastChild.textContent=line;
+  c.querySelector(".x").onclick=()=>{ checkShut=true; render(); };
 }
 function selObj(){ if(!sel) return null; if(sel.kind==="outline") return {p:design.outline,c:true}; if(sel.kind==="line") return design.lines[sel.i]; if(sel.kind==="blob") return {p:design.blobs[sel.i],c:true}; if(sel.kind==="hole") return design.holes[sel.i]?{p:design.holes[sel.i],c:true}:null; return null; }
 function renderNodes(){
@@ -819,9 +825,9 @@ function renderSelbar(){
       [["line","Line"],["area","Pressed area"],["hole","Cut-out hole"]].forEach(([k,l])=>{const x=document.createElement("button");x.textContent=l;if(cur===k)x.classList.add("on");x.onclick=()=>setLoopKind(k);seg.appendChild(x);});
       b.appendChild(seg); return;
     }
-    const lab=document.createElement("span"); lab.className="lbl"; lab.textContent= !SK().length&&design.outline.length ? "Draw lines inside the cookie." : design.outline.length ? (SK().some(l=>l.c&&!l.shape&&Math.abs(area(l.p))<0.7*Math.abs(area(design.outline))) ? "Tap a closed shape to make it a line, pressed area or hole." : "Keep drawing. Lines inside get pressed in.") : SK().length ? "Keep going round to close the shape." : "Draw here."; b.appendChild(lab);
+    const lab=document.createElement("span"); lab.className="lbl"; lab.textContent= !SK().length&&design.outline.length ? "Draw lines inside the cookie." : design.outline.length ? (SK().some(l=>l.c&&!l.shape&&Math.abs(area(l.p))<0.7*Math.abs(area(design.outline))) ? "Tap a shape to change it." : "Keep drawing.") : SK().length ? "Close the shape." : "Draw here."; b.appendChild(lab);
     if(SK().length && !design.outline.length) mk("Wrap a cookie around it",wrapCookie,"Make a cookie shape around what you drew","primary");
-    if(SK().length) mk("Clear drawing",()=>{ pushHist(); design.sketch=[]; design.outline=[]; design.lines=[]; design.blobs=[]; render(); markDirty(); });
+    if(SK().length) mk("Clear drawing",()=>{ pushHist(); design.sketch=[]; design.outline=[]; design.lines=[]; design.blobs=[]; render(); markDirty(); },"","clr");
     return;
   }
   if(!sel){b.classList.remove("show");return;}
@@ -1015,11 +1021,11 @@ function sketchBuild(){
   try{
     // 1. the drawing as it is, closing small gaps; 2. bigger gaps; 3. finish an outline that was left open
     let cands=[], auto="";
-    for(const gap of [1.6,3.2,5.5]){ cands=sketchSil(S,w,gap); if(cands.length){ if(gap>1.6) auto="closed a gap in the outline"; break; } }
+    for(const gap of [1.6,3.2,5.5]){ cands=sketchSil(S,w,gap); if(cands.length){ if(gap>1.6) auto="closed a gap"; break; } }
     if(!cands.length){
       let bi=-1, bl=0; S.forEach((l,i)=>{ const L=plen(l.p); if(!l.c && L>bl){bl=L;bi=i;} });
       if(bi>=0 && bl>25){ const l=S[bi], a=l.p[0], b=l.p[l.p.length-1];
-        if(Math.hypot(a[0]-b[0],a[1]-b[1]) < bl*0.45){ const S2=S.map((x,i)=>i===bi?{p:x.p,c:true}:x); cands=sketchSil(S2,w,1.6); if(cands.length){ auto="finished the outline for you"; S[bi].c=true; } } }
+        if(Math.hypot(a[0]-b[0],a[1]-b[1]) < bl*0.45){ const S2=S.map((x,i)=>i===bi?{p:x.p,c:true}:x); cands=sketchSil(S2,w,1.6); if(cands.length){ auto="finished the outline"; S[bi].c=true; } } }
     }
     if(!cands.length){ design.outline=[]; design.lines=S.map(l=>({p:l.p,c:l.c})); design.blobs=[]; design.holes=[]; return; }
     const sil=dpClosed(smoothClosed(resample(cands[0].concat([cands[0][0]]),0.5).slice(0,-1),6,2),0.04);
@@ -1062,7 +1068,7 @@ function startShape(k){
 function coach(R){
   const tips=[]; const S=SK(); const has=R.outline && R.outline.length>0;
   if(!has){
-    if(S.length) tips.push(["go","Keep going round until the line meets where it started."]);
+    if(S.length) tips.push(["go","Close the shape."]);
     return {ok:false, tips, stats:""};
   }
   const lines=design.lines, n=lines.length, dots=(design.blobs||[]).length;
@@ -1073,15 +1079,14 @@ function coach(R){
   let floating=0, tiny=0;
   lines.forEach((l,i)=>{ if(l.c) return; const L=plen(l.p); if(L<4){ tiny++; return; }
     const a=l.p[0], b=l.p[l.p.length-1]; const ca=dEdge(a)<touch||dOther(a,i)<touch, cb=dEdge(b)<touch||dOther(b,i)<touch; if(!ca&&!cb) floating++; });
-  if(sketchInfo.extra>0 && S.length) tips.push(["warn","Only the biggest closed shape becomes the cookie. Join the other piece to it, or erase it."]);
-  if(R.fixes && R.fixes.some(f=>/spikes/.test(f))) tips.push(["warn","Thin parts were rounded off, because anything under about 5 mm wide snaps. Make them chunkier if you want to keep them."]);
-  if(n===0 && dots===0) tips.push(["go","Now add 3 to 8 bold lines inside, so the cookie still reads after baking."]);
-  if(n>14) tips.push(["warn",`That is ${n} lines. The best cutters use about 6 to 12. Erase the smallest ones.`]);
-  if(floating>=3) tips.push(["warn",`${floating} lines float free. Run them to the edge or into another line: they press cleaner and make the cutter stronger.`]);
-  if(tiny>=3) tips.push(["warn","Marks shorter than 4 mm mostly vanish in dough. Keep one or two, drop the rest."]);
-  if(R.warns && R.warns.length) tips.push(["warn","Some lines sit very close together. Leave a few millimetres of dough between them."]);
+  if(sketchInfo.extra>0 && S.length) tips.push(["warn","Only the biggest shape becomes the cookie."]);
+  if(n===0 && dots===0) tips.push(["go","Add a few bold lines inside."]);
+  if(n>14) tips.push(["warn",`${n} lines is a lot. Aim for 6 to 12.`]);
+  if(floating>=3) tips.push(["warn","Join loose lines to the edge."]);
+  if(tiny>=3) tips.push(["warn","Tiny marks vanish in dough."]);
+  if(R.warns && R.warns.length) tips.push(["warn","Lines too close. Space them out."]);
   const ok=!tips.some(t=>t[0]==="warn") && (n>0||dots>0);
-  if(ok) tips.push(["ok","Bold, simple, connected. This will press well."]);
+  if(ok) tips.push(["ok","Looks good."]);
   return {ok, tips, stats:`${n} line${n===1?"":"s"}${dots?`, ${dots} dot${dots===1?"":"s"}`:""}`};
 }
 function renderCoach(R){
@@ -1390,8 +1395,8 @@ Reply with only a JSON object:
 {"subject": what the drawing shows in 1 to 3 words, or "abstract shape" if unclear,
  "name": a short fun name for this cookie, 1 to 3 words, title case,
  "remove": ids of lines that are clutter and can go without losing what the drawing is (an empty array if none; never more than half the lines; never lines needed to recognise the subject),
- "tips": up to 3 specific suggestions that refer to parts of THIS drawing and that the person would change by hand, each under 18 words, plain everyday words, no jargon}
-Example: {"subject":"cat face","name":"Sleepy Cat","remove":[7,9],"tips":["Make the ears wider at the base so they do not snap off."]}`;
+ "tips": up to 3 specific suggestions that refer to parts of THIS drawing and that the person would change by hand, each under 9 words, plain everyday words, no jargon}
+Example: {"subject":"cat face","name":"Sleepy Cat","remove":[7,9],"tips":["Make the ears wider at the base."]}`;
   try{
     const opts={modelTier:"default"}; if(sampleImg){ const png=await designPNG(true); if(png) opts.images=[png]; }
     const r=await sample.json(prompt, opts); aiGranted=true;

@@ -57,6 +57,12 @@ main{display:grid;grid-template-columns:72px 1fr 350px;min-height:0}
 .sizes button.on{background:var(--ink);color:var(--bg)}
 .sizes small{font-family:var(--mono);font-weight:400;font-size:11px;margin-left:3px}
 #check{position:absolute;right:14px;bottom:48px;z-index:4;max-width:340px;font-size:13px;font-weight:900;text-transform:uppercase;padding:8px 12px;background:var(--pop);border:4px solid var(--ink);box-shadow:5px 5px 0 var(--ink);color:var(--ink);transform:rotate(-1.5deg)}
+#check{padding-right:40px}
+#check .x{position:absolute;top:2px;right:2px;width:34px;height:34px;padding:0;border:0;box-shadow:none;background:transparent;font-size:22px;line-height:1;font-weight:900}
+#check .x:hover{background:var(--ink);color:var(--pop)}
+#check .x:active{transform:none}
+#check.shut{padding:0;transform:none;background:transparent;border:0;box-shadow:none}
+#check .chip{width:44px;height:44px;padding:0;background:var(--pop);font-size:20px;font-weight:900}
 #check span{display:block;font-family:var(--mono);font-weight:400;text-transform:none;font-size:12px;margin-top:3px;color:var(--ink)}
 #check .warn{color:var(--ink);background:var(--accent);padding:0 3px}
 .examples{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
@@ -153,8 +159,10 @@ header .sm{display:none}
   .tool svg{width:24px;height:24px}
   #selbar{top:8px;left:8px;right:auto;max-width:calc(100% - 16px);box-shadow:3px 3px 0 var(--ink)}
   #selbar .seg{flex:1 1 100%}
-  #check{left:8px;right:auto;bottom:calc(88px + env(safe-area-inset-bottom));max-width:calc(100% - 16px);font-size:12px;padding:6px 9px;transform:none;box-shadow:3px 3px 0 var(--ink)}
+  #selbar .clr{display:none}
+  #check{left:8px;right:auto;bottom:calc(88px + env(safe-area-inset-bottom));max-width:calc(100% - 16px);font-size:12px;padding:6px 40px 6px 9px;transform:none;box-shadow:3px 3px 0 var(--ink)}
   #check span{font-size:11px}
+  #check.shut{padding:0}
   #dims{display:none}
   #hint{display:none}
   #toast{bottom:calc(92px + env(safe-area-inset-bottom));max-width:90vw;text-align:center}
