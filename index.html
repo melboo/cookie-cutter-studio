@@ -9029,7 +9029,7 @@ let tool = "select", penTarget = "line";
 let sel = null;           // {kind:'outline'} | {kind:'line', i} | {kind:'blob', i}
 let selNode = -1;
 let view = {cx:0, cy:0, ppm:5};
-let srcImage = null, srcURL = null, showImage = true;
+let srcImage = null, srcURL = null, showImage = false, traceTidied=0;
 let mode3d = false;
 let cookieView = true;
 
@@ -9786,11 +9786,11 @@ function setupSvg(){
   layers.cGroove=el("path",{fill:"#d29a57",filter:"url(#groove)"},layers.cGrooveG);
   layers.tech=el("g",{},svg);
   layers.frame=el("g",{"pointer-events":"none"},layers.tech);
-  layers.wall=el("path",{fill:"#9c6a3f","fill-rule":"evenodd"},layers.tech);
-  layers.outline=el("path",{"fill-rule":"evenodd",fill:"#f4dfb6",stroke:"none"},layers.tech);
-  layers.details=el("path",{fill:"#8f5527","fill-rule":"nonzero"},layers.tech);
-  layers.bars=el("path",{fill:"#9c6a3f",opacity:.25,"pointer-events":"none"},layers.tech);
-  layers.img=el("image",{opacity:0.22,preserveAspectRatio:"none","pointer-events":"none",style:"mix-blend-mode:multiply"},layers.tech);
+  layers.wall=el("path",{fill:"#111","fill-rule":"evenodd"},layers.tech);
+  layers.outline=el("path",{"fill-rule":"evenodd",fill:"#ff8fbd",stroke:"none"},layers.tech);
+  layers.details=el("path",{fill:"#111","fill-rule":"nonzero"},layers.tech);
+  layers.bars=el("path",{fill:"#111",opacity:0,"pointer-events":"none"},layers.tech);
+  layers.img=el("image",{opacity:0.75,preserveAspectRatio:"none","pointer-events":"none"},layers.tech);
   layers.src=el("g",{"pointer-events":"none"},layers.tech);
   layers.hits=el("g",{},svg);
   layers.sel=el("path",{fill:"none",stroke:"#2f6fdb","stroke-width":1.6,"vector-effect":"non-scaling-stroke","pointer-events":"none"},svg);
@@ -9829,7 +9829,7 @@ function render(){
   // raw source (dashed) so people can see what the rules changed
   layers.src.innerHTML="";
   if(!fastRender && o.length){
-    el("path",{d:pathD([o]),fill:"none",stroke:"#6b3e1e","stroke-width":1,"stroke-dasharray":"3 3","vector-effect":"non-scaling-stroke",opacity:.45},layers.src);
+    el("path",{d:pathD([o]),fill:"none",stroke:"#111","stroke-width":1,"stroke-dasharray":"3 3","vector-effect":"non-scaling-stroke",opacity:.25},layers.src);
   }
   if(SK().length){
     el("path",{d:design.sketch.map(lineD).join(""),fill:"none",stroke:"#111","stroke-width":design.lineW,"stroke-linecap":"round","stroke-linejoin":"round",opacity:o.length?.16:.9},layers.src);
@@ -9844,8 +9844,8 @@ function render(){
     const x=design.img; layers.img.setAttribute("href",srcURL);
     layers.img.setAttribute("x",x.tx); layers.img.setAttribute("y",x.ty);
     layers.img.setAttribute("width",x.w*x.k); layers.img.setAttribute("height",x.h*x.k);
-    layers.img.style.display="";
-  } else layers.img.style.display="none";
+    layers.img.style.display=""; layers.outline.setAttribute("fill-opacity",.18);
+  } else { layers.img.style.display="none"; layers.outline.setAttribute("fill-opacity",1); }
   { const tm=$("traceMore"); if(tm) tm.hidden=!srcImage; } $("imgToggle").hidden=!(design.img&&srcURL);
   $("empty").style.display = (o.length||design.lines.length||SK().length||tool==="pen")?"none":"";
   if(R.fixes){ renderCheck(R.fixes, R.warns, ro.length>0, R); renderCoach(R); }
@@ -9894,7 +9894,7 @@ function updDims(){
   $("widthMm").value=Math.round(Math.max(bb.w,bb.h));
 }
 const hints={
-  select:"The filled shape is exactly what prints. The dashed line is your raw outline. Faint bands are the crossbars that hold the lines in place. Click any part to edit its points, double-click a line to add a point, and press Delete to remove one.",
+  select:"Tap a line to move it, reshape it or delete it. Use the pen to add a line and the eraser to rub part of one out.",
   pen:"",
   erase:"Rub over any part of a line to remove just that part."
 };
@@ -10223,6 +10223,7 @@ function runTrace(){
   design.outline=r.outline; design.lines=r.lines; design.blobs=r.blobs; design.sketch=[]; design.holes=[]; design.sizeKey=sizeKey;
   design.img={k:r.imgX.k, tx:r.imgX.tx, ty:r.imgX.ty, w:srcImage.naturalWidth, h:srcImage.naturalHeight};
   if(sizeObj()) fitReady(design, sizeMM());
+  { const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }
   const i=r.info; const parts=[];
   parts.push(i.useAlpha?"Transparent background found.":"Background colour found.");
   if(i.subject) parts.push("Found the picture inside its frame.");
@@ -10231,13 +10232,44 @@ function runTrace(){
   setTraceNote(parts.join(" "));
   sel=null; selNode=-1; render(); markDirty();
 }
+// After a picture is traced: tidy it into a drawing that makes a good cookie. Every line should end on the edge or on
+// another line; loose flecks and stubs go; long loose ends are led to the nearest line or edge; at most 12 lines stay.
+function simplifyDrawing(lines, outline, w){
+  if(!outline||outline.length<3) return lines;
+  let ls=lines.map(l=>({p:l.p.slice(),c:!!l.c}));
+  const edgeSegs=[]; for(let i=0;i<outline.length;i++){ const a=outline[i],b=outline[(i+1)%outline.length]; edgeSegs.push([a[0],a[1],b[0],b[1]]); }
+  const nearEdge=q=>{ let b=[Infinity]; for(const s2 of edgeSegs){ const r=segDist(q[0],q[1],...s2); if(r[0]<b[0]) b=r; } return b; };
+  const nearLine=(q,self,skipEnd)=>{ let b=[Infinity]; for(const m of ls){ const n=m.p.length, cl=m.c;
+      for(let i=0;i+1<n || (cl&&i<n);i++){ const a=m.p[i], c=m.p[(i+1)%n];
+        if(m===self){ const far=skipEnd===0? i>Math.min(n-2,6) : i<n-8; if(!far) continue; }
+        const r=segDist(q[0],q[1],a[0],a[1],c[0],c[1]); if(r[0]<b[0]) b=r; } } return b; };
+  const tie=w+0.9, reach=4.5;
+  for(const l of ls){ if(l.c||l.p.length<4) continue; const a=l.p[0], b=l.p[l.p.length-1]; if(plen(l.p)>=4 && Math.hypot(a[0]-b[0],a[1]-b[1])<=2.6) l.c=true; } // a small ring left open
+  const ends=l=>[0,1].map(e=>{ const q=e? l.p[l.p.length-1] : l.p[0]; const a=nearEdge(q), b=nearLine(q,l,e); return {q, d:Math.min(a[0],b[0]), to:a[0]<=b[0]?a:b}; });
+  for(let pass=0;pass<3;pass++){
+    // lead long loose ends home
+    for(const l of ls){ if(l.c) continue; const L=plen(l.p); const en=ends(l);
+      en.forEach((x,e)=>{ if(x.d>tie && x.d<=reach && L>=6){ const t=[x.to[1],x.to[2]]; if(e) l.p.push(t); else l.p.unshift(t); } });
+      const a=l.p[0], b=l.p[l.p.length-1]; if(L>=10 && Math.hypot(a[0]-b[0],a[1]-b[1])<=reach*0.7 && ends(l).every(x=>x.d>tie)){ l.c=true; } }
+    // drop what still hangs loose
+    const before=ls.length;
+    ls=ls.filter(l=>{ if(l.c) return true; const L=plen(l.p); const en=ends(l); const free=en.filter(x=>x.d>tie).length;
+      if(free===2) return L>=14; if(free===1) return L>=7; return L>=2.5; });
+    if(ls.length===before) break;
+  }
+  // tiny closed marks: keep the two biggest
+  const marks=ls.filter(l=>l.c && plen(l.p)<9).sort((a,b)=>plen(b.p)-plen(a.p)); const dropM=new Set(marks.slice(2));
+  ls=ls.filter(l=>!dropM.has(l));
+  if(ls.length>12){ const keep=new Set(ls.slice().sort((a,b)=>plen(b.p)-plen(a.p)).slice(0,12)); ls=ls.filter(l=>keep.has(l)); }
+  return ls;
+}
 function setTraceNote(t, bad){ if(bad && matchMedia("(max-width:860px)").matches) toast(t); const n=$("traceNote"); n.textContent=t; n.className="note"+(bad?" bad":""); n.hidden=false; }
 function loadURL(url, name){
   const im=new Image();
   im.onload=()=>{
     srcImage=im; srcURL=url; $("srcThumb").src=srcURL; $("srcThumb").hidden=false;
     if(name){ design.name=name; $("name").value=name; }
-    tracePushed=false; design.id=null; runTrace(); fitView(); showTab("image");
+    tracePushed=false; design.id=null; showImage=false; runTrace(); if(cookieView||mode3d) setView("edit"); setTool("select"); fitView(); showTab("image");
   };
   im.onerror=()=>toast("Couldn't read that image.");
   im.src=url;
@@ -10741,7 +10773,7 @@ $("aiOn").onchange=()=>{ if($("aiOn").checked) scheduleAI(300); else { clearTime
 document.querySelectorAll("#shapes button").forEach(b=>b.onclick=()=>startShape(b.dataset.s));
 $("emptyDraw").onclick=()=>setTool("pen");
 $("upBtn").onclick=()=>$("file").click();
-window.__ccs={designPNG, aiCheck, finishPen, sketchBuild, coach, startShape, setView, fromVector, decode, get design(){return design;}, set design(v){design=v;}, traceImage, buildSolids, filesFor, zip, loadURL, setTool, update3d, cutterReady, mfReady, encode, fitReady, sizeMM, render, fitView, getTraceOpts};
+window.__ccs={simplifyDrawing, designPNG, aiCheck, finishPen, sketchBuild, coach, startShape, setView, fromVector, decode, get design(){return design;}, set design(v){design=v;}, traceImage, buildSolids, filesFor, zip, loadURL, setTool, update3d, cutterReady, mfReady, encode, fitReady, sizeMM, render, fitView, getTraceOpts};
 })();
 </script>
 </body>
