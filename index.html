@@ -9788,6 +9788,7 @@ function setupSvg(){
   layers.frame=el("g",{"pointer-events":"none"},layers.tech);
   layers.wall=el("path",{fill:"#111","fill-rule":"evenodd"},layers.tech);
   layers.outline=el("path",{"fill-rule":"evenodd",fill:"#ff8fbd",stroke:"none"},layers.tech);
+  layers.regions=el("g",{"pointer-events":"none"},layers.tech);
   layers.details=el("path",{fill:"#111","fill-rule":"nonzero"},layers.tech);
   layers.bars=el("path",{fill:"#111",opacity:0,"pointer-events":"none"},layers.tech);
   layers.img=el("image",{opacity:0.75,preserveAspectRatio:"none","pointer-events":"none"},layers.tech);
@@ -9809,6 +9810,31 @@ function fitView(){
   view.ppm=Math.max(0.5, Math.min((r.width-Math.min(120,r.width*0.22))/Math.max(bb.w,20), (r.height-Math.min(150,r.height*0.36))/Math.max(bb.h,20)));
   applyView();
 }
+// The drawing keeps the picture's colours: each area between the lines is filled with the colour found there.
+let regKey="", regVal=[], regPix=null, regPixSrc=null;
+function regionFills(R){
+  if(!design.img || !srcImage || !R.outline || !R.outline.length) return [];
+  const key=readyKey+"|"+srcURL.length+"|"+JSON.stringify(design.img);
+  if(key===regKey) return regVal;
+  if(regPixSrc!==srcImage){ const iw=srcImage.naturalWidth, ih=srcImage.naturalHeight, sc=Math.min(1,420/Math.max(iw,ih));
+    const cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(iw*sc)); cv.height=Math.max(1,Math.round(ih*sc));
+    const g=cv.getContext("2d",{willReadFrequently:true}); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height); g.drawImage(srcImage,0,0,cv.width,cv.height);
+    regPix={d:g.getImageData(0,0,cv.width,cv.height).data, w:cv.width, h:cv.height, sc}; regPixSrc=srcImage; }
+  const P=regPix, x=design.img, out=[];
+  let regs=[]; try{ regs=exPolys(diff([R.outline], R.details||[])); }catch(e){ regs=[]; }
+  const med=a=>{ a.sort((p,q)=>p-q); return a[a.length>>1]; };
+  for(const e of regs){ const A=exArea(e); if(A<2) continue;
+    const bb=bbox([e.outer]); const step=Math.max(0.35, Math.sqrt(A)/14); const rs=[],gs=[],bs=[];
+    for(let yy=bb.y0+step/2; yy<bb.y1; yy+=step) for(let xx=bb.x0+step/2; xx<bb.x1; xx+=step){
+      const q=[xx,yy]; if(!pointInPoly(q,e.outer) || e.holes.some(h=>pointInPoly(q,h))) continue;
+      const ix=Math.round((xx-x.tx)/x.k*P.sc), iy=Math.round((yy-x.ty)/x.k*P.sc); if(ix<0||iy<0||ix>=P.w||iy>=P.h) continue;
+      const i=(iy*P.w+ix)*4; const r=P.d[i], g2=P.d[i+1], b=P.d[i+2];
+      if(0.299*r+0.587*g2+0.114*b<50) continue;      // drawn ink, not paint
+      rs.push(r); gs.push(g2); bs.push(b); }
+    if(rs.length<3) continue;
+    out.push({d:pathD([e.outer].concat(e.holes)), fill:`rgb(${med(rs)},${med(gs)},${med(bs)})`}); }
+  regKey=key; regVal=out; return out;
+}
 let fastRender=false;
 function render(){
   const o=design.outline;
@@ -9816,6 +9842,7 @@ function render(){
   const ro=R.outline; const rh=(R.holes||[]);
   layers.outline.setAttribute("d", ro.length?pathD([ro].concat(rh)):"");
   layers.details.setAttribute("d", pathD(R.details));
+  if(!fastRender){ layers.regions.innerHTML=""; if(!cookieView && !showImage){ for(const f of regionFills(R)) el("path",{d:f.d,fill:f.fill,"fill-rule":"evenodd",stroke:f.fill,"stroke-width":0.5,"stroke-linejoin":"round"},layers.regions); } }
   const od=ro.length?pathD([ro].concat(rh)):"";
   layers.cShadow.setAttribute("d",od); layers.cBody.setAttribute("d",od); layers.cTex.setAttribute("d",od); layers.cEdge.setAttribute("d",od);
   document.getElementById("cookieClipPath").setAttribute("d",od);
@@ -10249,7 +10276,7 @@ function simplifyDrawing(lines, outline, w){
   for(let pass=0;pass<3;pass++){
     // lead long loose ends home
     for(const l of ls){ if(l.c) continue; const L=plen(l.p); const en=ends(l);
-      en.forEach((x,e)=>{ if(x.d>tie && x.d<=reach && L>=6){ const t=[x.to[1],x.to[2]]; if(e) l.p.push(t); else l.p.unshift(t); } });
+      en.forEach((x,e)=>{ if(x.d>0.25 && x.d<=(L>=6?reach:tie)){ const dx=x.to[1]-x.q[0], dy=x.to[2]-x.q[1], dd=Math.hypot(dx,dy)||1; const t=[x.to[1]+dx/dd*0.7, x.to[2]+dy/dd*0.7]; if(e) l.p.push(t); else l.p.unshift(t); } });
       const a=l.p[0], b=l.p[l.p.length-1]; if(L>=10 && Math.hypot(a[0]-b[0],a[1]-b[1])<=reach*0.7 && ends(l).every(x=>x.d>tie)){ l.c=true; } }
     // drop what still hangs loose
     const before=ls.length;
