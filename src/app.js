@@ -577,7 +577,7 @@ function traceImage(img, o, lineW){
    ===================================================================== */
 let readyKey="", readyVal=null;
 function cutterReady(d){
-  const key=JSON.stringify([d.outline,d.lines,d.blobs,d.lineW,d.print,d.frame,d.holes||[]]);
+  const key=JSON.stringify([d.outline,d.lines,d.blobs,d.lineW,d.print,d.frame,d.holes||[],d.art&&d.art.real?[d.art.v,d.art.ink.length,d.art.w]:0]);
   if(key===readyKey && readyVal) return readyVal;
   const fixes=[], warns=[]; let res={outline:[],details:[],bars:[],holes:[],fixes,warns};
   try{
@@ -605,6 +605,16 @@ function cutterReady(d){
         holes=hs.map(p=>dpClosed(p,0.04));
       }
       let det=union(strokeLines(d.lines.concat(extraLines),w).concat(d.blobs||[]));
+      // an uploaded drawing: press its own ink into the dough, as drawn. Its outer outline is the blade, so that band is left out,
+      // and lines that ran into the outline are led on to the blade.
+      if(d.art && d.art.real && d.art.ink.length && !extraLines.length){ try{
+        const t=d.art.w*1.6+0.3, core=offset([O2], -t, 0.04);
+        let ink=inter(d.art.ink, core);
+        ink=offset(offset(ink,-0.25,0.03),0.25,0.03);
+        const band=diff([O2], core);
+        const reach=inter(strokeLines(d.lines, Math.max(w, d.art.w*1.25)), band);
+        const thin=strokeLines(d.lines, RULES.minLine);             // nothing thinner than can be printed
+        det=union(ink.concat(reach, inter(thin, offset(ink,0.2,0.04)))); }catch(err){ console.warn(err); } }
       if(det.length && holes.length) det=diff(det, offset(holes, 1.2, 0.04));
       if(det.length){
         const fat=exPolys(offset(offset(det,-1.8,0.03),1.8,0.03)).filter(e=>exArea(e)>RULES.bigFill);
@@ -791,7 +801,7 @@ function setupSvg(){
     <feOffset in="b" dx="0.3" dy="0.38" result="o1"/><feComposite in="SourceAlpha" in2="o1" operator="out" result="e1"/>
     <feFlood flood-color="#6a3c14" flood-opacity="0.9"/><feComposite in2="e1" operator="in" result="sh"/>
     <feOffset in="b" dx="-0.3" dy="-0.38" result="o2"/><feComposite in="SourceAlpha" in2="o2" operator="out" result="e2"/>
-    <feFlood flood-color="#fff3d8" flood-opacity="0.9"/><feComposite in2="e2" operator="in" result="hi"/>
+    <feFlood flood-color="#fff3d8" flood-opacity="0.5"/><feComposite in2="e2" operator="in" result="hi"/>
     <feMerge><feMergeNode in="halo"/><feMergeNode in="SourceGraphic"/><feMergeNode in="sh"/><feMergeNode in="hi"/></feMerge>
   </filter>
   <clipPath id="cookieClip"><path id="cookieClipPath" clip-rule="evenodd"/></clipPath>`;
@@ -802,7 +812,7 @@ function setupSvg(){
   layers.cTex=el("path",{"fill-rule":"evenodd",fill:"#000",filter:"url(#tex)",opacity:.38},layers.cookie);
   layers.cEdge=el("path",{fill:"none",stroke:"#b26c2e","stroke-width":3.2,opacity:.55,filter:"url(#edgeBlur)","clip-path":"url(#cookieClip)"},layers.cookie);
   layers.cGrooveG=el("g",{"clip-path":"url(#cookieClip)"},layers.cookie);
-  layers.cGroove=el("path",{fill:"#d29a57",filter:"url(#groove)"},layers.cGrooveG);
+  layers.cGroove=el("path",{fill:"#b9793a",filter:"url(#groove)"},layers.cGrooveG);
   layers.tech=el("g",{},svg);
   layers.frame=el("g",{"pointer-events":"none"},layers.tech);
   layers.wall=el("path",{fill:"#111","fill-rule":"evenodd"},layers.tech);
@@ -1754,7 +1764,7 @@ function thumb(d0){
   s.setAttribute("viewBox",`${bb.x0+bb.w/2-S/2} ${bb.y0+bb.h/2-S/2} ${S} ${S}`);
   el("path",{d:pathD([d.outline]),fill:"#3b2410",opacity:.22,transform:`translate(${S*0.01} ${S*0.018})`},s);
   el("path",{d:pathD([d.outline]),fill:"url(#dough)"},s);
-  el("path",{d:pathD(d.details),fill:"#d29a57",filter:"url(#groove)"},s);
+  el("path",{d:pathD(d.details),fill:"#b9793a",filter:"url(#groove)"},s);
   return s;
 }
 
