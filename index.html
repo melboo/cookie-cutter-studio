@@ -9416,7 +9416,7 @@ function traceImage(img, o, lineW){
   const cover=innerN? darkN/innerN : 0;
   let mode=o.src;
   // a painted picture (filled dark and light areas, not drawn lines): Otsu split of the shape into dark and light
-  let regLab=null, inkMask=null, inkMode=false;
+  let regLab=null, inkMask=null, inkMode=false, realInk=false; const autoSrc=o.src==="auto";
   { const hist=new Float64Array(256); let n=0; for(const i of comps[bi]){ hist[Math.max(0,Math.min(255,L[i]|0))]++; n++; }
     let sum=0; for(let t=0;t<256;t++) sum+=t*hist[t];
     let wB=0,sB=0,best=-1,thr=128,m0=0,m1=0; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=n-wB; if(!wF) break; sB+=t*hist[t];
@@ -9437,7 +9437,7 @@ function traceImage(img, o, lineW){
       for(const i of comps[bi]){ const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); if(0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]<62 && c<75){ ik[i]=1; ni++; } }
       const dti=distTransform(ik,W,H); let nfat=0; for(const i of comps[bi]) if(ik[i]&&dti[i]>=Math.max(4,1.3*pxPerMM)) nfat++;
       if(o.debug) o.debug.ink={frac:ni/n, fat:ni?nfat/ni:0};
-      if(ni>n*0.03 && ni<n*0.45 && nfat<ni*0.08){ inkMask=ik; mode="ink"; } }
+      if(ni>n*0.03 && ni<n*0.45 && nfat<ni*0.08){ inkMask=ik; mode="ink"; realInk=true; } }
     // a shaded illustration: its parts are separated by dark creases (darker than the paint on both sides).
     // Those creases are the lines to keep; soft shading and highlights are not.
     if(mode==="auto" && painted && !inkMask && !invert){ const cr=new Uint8Array(N), grey=new Uint8Array(N); let nc=0;
@@ -9551,7 +9551,18 @@ function traceImage(img, o, lineW){
   const blobs=inter(blobsMM.length?union(blobsMM):[], offset([silMM],-RULES.edge,0.04)).filter(p=>Math.abs(area(p))>=RULES.minArea).map(p=>dpClosed(p,0.04));
   if(o.debug){o.debug.blobsMM=blobsMM.length; o.debug.blobs=blobs.length;}
   const imgX={k:k*sc, tx:(pad-cx)*k, ty:(pad-cy)*k};
-  return {outline, lines, blobs, imgX, info:{mode, cover, useAlpha, bg, dropped, subject:subjectMode}};
+  // the picture's own ink, kept as it was drawn (for the drawing step)
+  let ink=null, inkW=0;
+  try{
+    let pix=null;
+    if(realInk){ pix=new Uint8Array(N); for(const i of comps[bi]) if(inkMask[i]) pix[i]=1; }
+    else if(autoSrc && mode==="lines" && !inkMode && !invert && cover>0.004){ pix=new Uint8Array(N); for(const i of comps[bi]){ if(dark[i] || (!inner[i] && L[i]<110)) pix[i]=1; } }
+    if(pix){ let np=0; for(let i=0;i<N;i++) np+=pix[i]; const frac=np/comps[bi].length;
+      if(frac>0.02 && frac<0.6){
+        const loops=traceLoops(pix,W,H).filter(l=>l.length>=8).map(l=>dpClosed(smoothClosed(l,2,2),0.3)).filter(l=>l.length>=3);
+        ink=clean(loops.map(T),EO).filter(p=>Math.abs(area(p))>=0.25); inkW=Math.max(0.8, 2*hw*k); if(!ink.length) ink=null; } }
+  }catch(err){ console.warn(err); ink=null; }
+  return {outline, lines, blobs, imgX, ink, inkW, info:{mode, cover, useAlpha, bg, dropped, subject:subjectMode}};
 }
 
 /* =====================================================================
@@ -9729,6 +9740,7 @@ function fitSize(d, mm){
   const f=q=>[(q[0]-cx)*s,(q[1]-cy)*s];
   d.outline=d.outline.map(f); d.lines=d.lines.map(l=>({p:l.p.map(f),c:l.c})); d.blobs=d.blobs.map(p=>p.map(f)); if(d.sketch) d.sketch=d.sketch.map(l=>({...l,p:l.p.map(f)})); if(d.holes) d.holes=d.holes.map(p=>p.map(f));
   if(d.img){const x=d.img; x.tx=(x.tx-cx)*s; x.ty=(x.ty-cy)*s; x.k*=s;}
+  if(d.art){ d.art.ink=d.art.ink.map(p=>p.map(f)); d.art.w*=s; d.art.resnap=true; d.art.v++; }
 }
 function fitReady(d, mm){
   fitSize(d, mm);
@@ -9738,9 +9750,9 @@ function fitReady(d, mm){
 function applySizeDefaults(d, z){ if(!z) return; d.lineW=z.lineW; d.print.h=z.h; d.print.style=z.style; }
 
 /* ---------------- history ---------------- */
-function snap(){return JSON.stringify({o:design.outline,l:design.lines,b:design.blobs,w:design.lineW,img:design.img,s:design.sketch||[],h:design.holes||[]});}
+function snap(){return JSON.stringify({o:design.outline,l:design.lines,b:design.blobs,w:design.lineW,img:design.img,s:design.sketch||[],h:design.holes||[],a:design.art?{ink:design.art.ink,w:design.art.w,real:design.art.real}:null});}
 function pushHist(){hist.push(snap()); if(hist.length>120) hist.shift(); future=[]; updUndo();}
-function restore(s){const v=JSON.parse(s); design.outline=v.o; design.lines=v.l; design.blobs=v.b; design.lineW=v.w; design.img=v.img; design.sketch=v.s||[]; design.holes=v.h||[]; sel=null; selNode=-1; syncLineW(); render(); markDirty();}
+function restore(s){const v=JSON.parse(s); design.outline=v.o; design.lines=v.l; design.blobs=v.b; design.lineW=v.w; design.img=v.img; design.sketch=v.s||[]; design.holes=v.h||[]; design.art=v.a?{ink:v.a.ink,w:v.a.w,real:v.a.real,v:(artV++),resnap:true}:null; sel=null; selNode=-1; syncLineW(); render(); markDirty();}
 function undo(){if(!hist.length)return; future.push(snap()); restore(hist.pop()); updUndo();}
 function redo(){if(!future.length)return; hist.push(snap()); restore(future.pop()); updUndo();}
 function updUndo(){$("undo").disabled=!hist.length; $("redo").disabled=!future.length;}
@@ -9790,6 +9802,7 @@ function setupSvg(){
   layers.outline=el("path",{"fill-rule":"evenodd",fill:"#ff8fbd",stroke:"none"},layers.tech);
   layers.regions=el("g",{"pointer-events":"none"},layers.tech);
   layers.details=el("path",{fill:"#111","fill-rule":"nonzero"},layers.tech);
+  layers.art=el("path",{fill:"#111","fill-rule":"nonzero","pointer-events":"none"},layers.tech);
   layers.bars=el("path",{fill:"#111",opacity:0,"pointer-events":"none"},layers.tech);
   layers.img=el("image",{opacity:0.75,preserveAspectRatio:"none","pointer-events":"none"},layers.tech);
   layers.src=el("g",{"pointer-events":"none"},layers.tech);
@@ -9810,28 +9823,65 @@ function fitView(){
   view.ppm=Math.max(0.5, Math.min((r.width-Math.min(120,r.width*0.22))/Math.max(bb.w,20), (r.height-Math.min(150,r.height*0.36))/Math.max(bb.h,20)));
   applyView();
 }
+// The drawing made from an uploaded picture ("art"): its ink exactly as drawn, kept apart from the cutter that is derived from it.
+// When lines are added, erased, moved or deleted, the ink follows.
+let artV=1;
+function artSync(){
+  const a=design.art; if(!a) return null;
+  if(SK().length){ design.art=null; return null; }
+  const oKey=JSON.stringify(design.outline), cur=design.lines.map(l=>JSON.stringify([l.p,!!l.c])), curB=design.blobs.map(p=>JSON.stringify(p));
+  if(a.resnap||!a.snap){ a.snap=cur; a.bSnap=curB; a.oSnap=oKey; a.resnap=false; return a; }
+  if(a.oSnap!==oKey){ design.art=null; return null; }
+  const had=new Set(a.snap), has=new Set(cur), hadB=new Set(a.bSnap), hasB=new Set(curB);
+  const removed=a.snap.filter(k=>!has.has(k)).map(k=>{const v=JSON.parse(k); return {p:v[0],c:v[1]};});
+  const added=cur.filter(k=>!had.has(k)).map(k=>{const v=JSON.parse(k); return {p:v[0],c:v[1]};});
+  const remB=a.bSnap.filter(k=>!hasB.has(k)).map(k=>JSON.parse(k)), addB=curB.filter(k=>!hadB.has(k)).map(k=>JSON.parse(k));
+  if(removed.length||added.length||remB.length||addB.length){
+    try{ const w=a.w; let ink=a.ink;
+      const rem=union(strokeLines(removed,w*1.3+0.9).concat(remB.length?offset(remB,0.5,0.04):[]));
+      if(rem.length){ let cut=added.length? diff(rem, union(strokeLines(added,w+0.9))) : rem;
+        if(a.real) cut=inter(cut, offset([design.outline], -(Math.max(w,1.5)*1.4), 0.04)); // the outer outline of the drawing is never cut
+        if(cut.length){ const others=design.lines.filter(l=>!added.some(x=>x.p===l.p));
+          const heal=inter(union(strokeLines(design.lines,w*0.85)), cut);
+          ink=diff(ink,cut); if(heal.length) ink=union(ink.concat(heal));
+          // crumbs of the removed line that the cut left behind go too
+          const nearCut=offset(cut, w*1.5, 0.05); const keep=[];
+          for(const e of exPolys(ink)){ if(exArea(e) < 8*w*w && netArea(inter([e.outer], nearCut)) > 0.5*Math.abs(area(e.outer))) continue; keep.push(e); }
+          ink=flatEx(keep); } }
+      let add=strokeLines(added,w).concat(addB);
+      if(add.length){ add=inter(union(add), [design.outline]); ink=union(ink.concat(add)); } // nothing pokes out of the drawing
+      a.ink=ink.filter(p=>Math.abs(area(p))>=0.2); a.v=(artV++);
+    }catch(err){ console.warn(err); }
+    a.snap=cur; a.bSnap=curB;
+  }
+  return a;
+}
 // The drawing keeps the picture's colours: each area between the lines is filled with the colour found there.
 let regKey="", regVal=[], regPix=null, regPixSrc=null;
-function regionFills(R){
+function regionFills(R, art){
   if(!design.img || !srcImage || !R.outline || !R.outline.length) return [];
-  const key=readyKey+"|"+srcURL.length+"|"+JSON.stringify(design.img);
+  const key=readyKey+"|"+srcURL.length+"|"+JSON.stringify(design.img)+"|"+(art?art.v+":"+art.ink.length:"-");
   if(key===regKey) return regVal;
   if(regPixSrc!==srcImage){ const iw=srcImage.naturalWidth, ih=srcImage.naturalHeight, sc=Math.min(1,420/Math.max(iw,ih));
     const cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(iw*sc)); cv.height=Math.max(1,Math.round(ih*sc));
     const g=cv.getContext("2d",{willReadFrequently:true}); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height); g.drawImage(srcImage,0,0,cv.width,cv.height);
     regPix={d:g.getImageData(0,0,cv.width,cv.height).data, w:cv.width, h:cv.height, sc}; regPixSrc=srcImage; }
   const P=regPix, x=design.img, out=[];
-  let regs=[]; try{ regs=exPolys(diff([R.outline], R.details||[])); }catch(e){ regs=[]; }
+  let regs=[];
+  try{ let base=[R.outline], cutP=R.details||[];
+    if(art){ cutP=art.ink; const outer=exPolys(art.ink).map(e=>e.outer); const b2=inter([design.outline], outer);
+      base = netArea(b2) > 0.6*Math.abs(area(design.outline)) ? outer : [design.outline]; }
+    regs=exPolys(diff(base, cutP)); }catch(e){ regs=[]; }
   const med=a=>{ a.sort((p,q)=>p-q); return a[a.length>>1]; };
-  for(const e of regs){ const A=exArea(e); if(A<2) continue;
-    const bb=bbox([e.outer]); const step=Math.max(0.35, Math.sqrt(A)/14); const rs=[],gs=[],bs=[];
+  for(const e of regs){ const A=exArea(e); if(A<0.4) continue;
+    const bb=bbox([e.outer]); const step=Math.max(0.25, Math.sqrt(A)/14); const rs=[],gs=[],bs=[];
     for(let yy=bb.y0+step/2; yy<bb.y1; yy+=step) for(let xx=bb.x0+step/2; xx<bb.x1; xx+=step){
       const q=[xx,yy]; if(!pointInPoly(q,e.outer) || e.holes.some(h=>pointInPoly(q,h))) continue;
       const ix=Math.round((xx-x.tx)/x.k*P.sc), iy=Math.round((yy-x.ty)/x.k*P.sc); if(ix<0||iy<0||ix>=P.w||iy>=P.h) continue;
       const i=(iy*P.w+ix)*4; const r=P.d[i], g2=P.d[i+1], b=P.d[i+2];
       if(0.299*r+0.587*g2+0.114*b<50) continue;      // drawn ink, not paint
       rs.push(r); gs.push(g2); bs.push(b); }
-    if(rs.length<3) continue;
+    if(rs.length<2) continue;
     out.push({d:pathD([e.outer].concat(e.holes)), fill:`rgb(${med(rs)},${med(gs)},${med(bs)})`}); }
   regKey=key; regVal=out; return out;
 }
@@ -9842,7 +9892,11 @@ function render(){
   const ro=R.outline; const rh=(R.holes||[]);
   layers.outline.setAttribute("d", ro.length?pathD([ro].concat(rh)):"");
   layers.details.setAttribute("d", pathD(R.details));
-  if(!fastRender){ layers.regions.innerHTML=""; if(!cookieView && !showImage){ for(const f of regionFills(R)) el("path",{d:f.d,fill:f.fill,"fill-rule":"evenodd",stroke:f.fill,"stroke-width":0.5,"stroke-linejoin":"round"},layers.regions); } }
+  const art = cookieView ? null : (fastRender ? design.art : artSync());
+  if(!fastRender){ layers.regions.innerHTML=""; if(!cookieView && !showImage){ for(const f of regionFills(R, art)) el("path",{d:f.d,fill:f.fill,"fill-rule":"evenodd",stroke:f.fill,"stroke-width":art?0.3:0.5,"stroke-linejoin":"round"},layers.regions); } }
+  layers.art.setAttribute("d", art? pathD(art.ink) : "");
+  if(art && !fastRender) layers.details.setAttribute("d","");
+  layers.outline.setAttribute("fill", art? (showImage?"none":"#fff") : "#ff8fbd");
   const od=ro.length?pathD([ro].concat(rh)):"";
   layers.cShadow.setAttribute("d",od); layers.cBody.setAttribute("d",od); layers.cTex.setAttribute("d",od); layers.cEdge.setAttribute("d",od);
   document.getElementById("cookieClipPath").setAttribute("d",od);
@@ -9853,9 +9907,10 @@ function render(){
   layers.hits.style.display = cookieView ? "none" : "";
   layers.bars.setAttribute("d", pathD(R.bars||[]));
   try{ layers.wall.setAttribute("d", ro.length?pathD(offset([ro], design.print.base, 0.05).concat([ro.slice().reverse()]).concat(rh).concat(rh.length?offset(rh,-design.print.base,0.05):[])):""); }catch(e){ layers.wall.setAttribute("d",""); }
+  if(art) layers.wall.setAttribute("d","");
   // raw source (dashed) so people can see what the rules changed
   layers.src.innerHTML="";
-  if(!fastRender && o.length){
+  if(!fastRender && o.length && !art){
     el("path",{d:pathD([o]),fill:"none",stroke:"#111","stroke-width":1,"stroke-dasharray":"3 3","vector-effect":"non-scaling-stroke",opacity:.25},layers.src);
   }
   if(SK().length){
@@ -10249,8 +10304,13 @@ function runTrace(){
   if(!tracePushed){ pushHist(); tracePushed=true; }
   design.outline=r.outline; design.lines=r.lines; design.blobs=r.blobs; design.sketch=[]; design.holes=[]; design.sizeKey=sizeKey;
   design.img={k:r.imgX.k, tx:r.imgX.tx, ty:r.imgX.ty, w:srcImage.naturalWidth, h:srcImage.naturalHeight};
+  design.art = r.ink ? {ink:r.ink, w:r.inkW, v:0, real:true, resnap:true} : null;
   if(sizeObj()) fitReady(design, sizeMM());
+  artSync();
   { const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }
+  if(!design.art){ try{ const lw=design.lineW, O=design.outline;
+      const ring=diff([O], offset([O], -1.25*lw, 0.04));
+      design.art={ink:inter(union(strokeLines(design.lines,lw).concat(design.blobs, ring)), [O]), w:lw, v:0, real:false, resnap:true}; }catch(err){ console.warn(err); design.art=null; } }
   const i=r.info; const parts=[];
   parts.push(i.useAlpha?"Transparent background found.":"Background colour found.");
   if(i.subject) parts.push("Found the picture inside its frame.");
