@@ -597,6 +597,13 @@ function cutterReady(d){
     if(O && d.frame && d.frame!=="figure"){ extraLines=[{p:dpClosed(O,0.03),c:true}]; O=frameShape(O, d.frame); }
     if(O && Math.abs(area(O))>20){
       const a0=Math.abs(area(O));
+      if(d.art && d.art.vector){
+        // the cut runs along the middle of the drawn outline, so that line becomes the wall itself (no second ridge beside it)
+        const O2v=dpClosed(largest(offset([O], -0.45, 0.03))||O, 0.02); let detv=[]; try{ detv=inter(d.art.ink, [O2v]); }catch(e){}
+        detv=flatEx(exPolys(detv).filter(e=>exArea(e)>=0.4));
+        const barsv = (d.print.style==="one" && detv.length) ? makeBars(O2v, detv, d.print) : [];
+        res={outline:O2v, details:detv, bars:barsv, holes:[], fixes, warns}; readyKey=key; readyVal=res; return res;
+      }
       // a drawing already designed for a cutter keeps its shape: only hairline slots and threads are cleaned up
       const designed=!!(d.art && d.art.real), notchR=designed? 0.5 : RULES.notch, neckR=designed? 0.9 : RULES.neck;
       let O1=largest(offset(offset([O],notchR,0.04),-notchR,0.04))||O;
@@ -1536,6 +1543,66 @@ function thickenThinParts(O){
   let grown=union([O].concat(offset(thin, r*0.9, 0.04))); grown=offset(offset(grown,0.8,0.04),-0.8,0.04);
   const ex=exPolys(grown); if(!ex.length) return O; ex.sort((p,q)=>exArea(q)-exArea(p)); return ex[0].outer;
 }
+// ---------- Vector design: a clean line drawing becomes the cutter design with smooth curves and every join as drawn ----------
+function vectorDesign(img, sizeMM){
+  // raster at ~720 px, black/white, padded
+  const PAD=24, sc=Math.min(1, 720/Math.max(img.naturalWidth, img.naturalHeight));
+  const w=Math.max(1,Math.round(img.naturalWidth*sc)), h=Math.max(1,Math.round(img.naturalHeight*sc)), W=w+2*PAD, H=h+2*PAD, N=W*H;
+  const cv=document.createElement("canvas"); cv.width=w; cv.height=h; const g=cv.getContext("2d",{willReadFrequently:true});
+  g.fillStyle="#fff"; g.fillRect(0,0,w,h); g.drawImage(img,0,0,w,h); const D=g.getImageData(0,0,w,h).data;
+  const ink=new Uint8Array(N); let touchesEdge=false;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=(y*w+x)*4, v=(D[i]+D[i+1]+D[i+2])/3<128?1:0; ink[(y+PAD)*W+x+PAD]=v; if(v && (x===0||y===0||x===w-1||y===h-1)) touchesEdge=true; }
+  const dist=m=>distTransform(m,W,H);
+  const inv=m=>{ const o=new Uint8Array(N); for(let i=0;i<N;i++) o[i]=m[i]?0:1; return o; };
+  const comps=m=>{ const lab=new Int32Array(N), out=[]; let n=0;
+    for(let s=0;s<N;s++){ if(!m[s]||lab[s]) continue; n++; const st=[s], px=[]; lab[s]=n;
+      while(st.length){ const i=st.pop(); px.push(i); const x=i%W; for(const j of [x>0?i-1:-1, x<W-1?i+1:-1, i-W, i+W]) if(j>=0&&j<N&&m[j]&&!lab[j]){ lab[j]=n; st.push(j); } } out.push(px); } return out; };
+  const flood=free=>{ const out=new Uint8Array(N), st=[]; for(let x=0;x<W;x++) st.push(x,(H-1)*W+x); for(let y=0;y<H;y++) st.push(y*W, y*W+W-1);
+    while(st.length){ const i=st.pop(); if(out[i]||!free[i]) continue; out[i]=1; const x=i%W; if(x>0) st.push(i-1); if(x<W-1) st.push(i+1); if(i>=W) st.push(i-W); if(i<N-W) st.push(i+W); } return out; };
+  const close=(m,r)=>{ const d1=dist(inv(m)); const gr=new Uint8Array(N); for(let i=0;i<N;i++) gr[i]=(m[i]||d1[i]<=r)?1:0; const d2=dist(gr); const o=new Uint8Array(N); for(let i=0;i<N;i++) o[i]=(m[i]||(gr[i]&&d2[i]>r))?1:0; return o; };
+  for(const c of comps(ink)) if(c.length<25) for(const i of c) ink[i]=0;
+  let x0=W,x1=0,y0=H,y1=0; for(let i=0;i<N;i++) if(ink[i]){ const x=i%W,y=(i/W)|0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  if(x1<=x0) return null;
+  const ppm=Math.max(x1-x0,y1-y0)/sizeMM;
+  // the cookie: everything inside the outermost closed outline; small gaps (up to ~3.5 mm) are closed
+  const silOf=r=>{ const s=close(ink,Math.round(r)), out=flood(inv(s)); const m=new Uint8Array(N); let a=0; for(let i=0;i<N;i++){ m[i]=out[i]?0:1; a+=m[i]; } return {m,a}; };
+  const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s2=silOf(ppm*mm); if(s2.a>=0.9*ref.a){ pick=s2; break; } }
+  let sil=(pick||ref).m; { const cs=comps(sil); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(N); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
+  // line weight: thin lines are brought up to ~1.1 mm
+  const di=dist(ink), hw=[]; for(let i=0;i<N;i++) if(ink[i]) hw.push(di[i]); hw.sort((a,b)=>a-b); const half=hw[Math.floor(hw.length*0.9)]||1, want=0.55*ppm;
+  let fat=ink; if(half<want){ const dn=dist(inv(ink)); fat=new Uint8Array(N); for(let i=0;i<N;i++) fat[i]=(ink[i]||dn[i]<=want-half)?1:0; }
+  // all ink inside the cookie as one shape (every join as drawn)
+  let all=new Uint8Array(N); for(let i=0;i<N;i++) all[i]=(fat[i]&&sil[i])?1:0;
+  { const ht=0.45*ppm, d=dist(all), hw2=[]; for(let i=0;i<N;i++) if(all[i]) hw2.push(d[i]); hw2.sort((a,b)=>a-b);
+    const hh=hw2[Math.floor(hw2.length*0.85)]||ht, e=hh-ht; if(e>0.5) for(let i=0;i<N;i++) all[i]=(all[i]&&d[i]>e)?1:0;
+    // separate solid dots become true-circle rings (opening >= 2.5 mm), or a ~2 mm dot when there is no room
+    const d2=dist(all), core=new Uint8Array(N);
+    for(const comp of comps(all)){ let a0=W,a1=0,b0=H,b1=0; for(const i of comp){ const x=i%W,y=(i/W)|0; if(x<a0)a0=x; if(x>a1)a1=x; if(y<b0)b0=y; if(y>b1)b1=y; }
+      if(Math.max(a1-a0,b1-b0)<=12*ppm) for(const i of comp) if(d2[i]>ht*2.2) core[i]=1; }
+    for(const c of comps(core)){ let cx=0,cy=0; for(const i of c){ cx+=i%W; cy+=(i/W)|0; } cx/=c.length; cy/=c.length;
+      let rmax=0; for(const i of c) rmax=Math.max(rmax, Math.hypot(i%W-cx, ((i/W)|0)-cy)); if(rmax>Math.sqrt(c.length/Math.PI)*1.6) continue;
+      const dotR=rmax+ht*2.2; let near=1e9; const look=Math.ceil(dotR+6*ppm);
+      for(let y=Math.max(0,Math.floor(cy-look));y<=Math.min(H-1,cy+look);y++) for(let x=Math.max(0,Math.floor(cx-look));x<=Math.min(W-1,cx+look);x++){ const q=Math.hypot(x-cx,y-cy); if(q>dotR+1 && all[y*W+x] && q<near) near=q; }
+      let R=Math.min(Math.max(dotR,2.25*ppm), near-2.5*ppm), r=R-ht*2; if(r<1.25*ppm){ R=ppm; r=-1; }
+      for(let y=Math.floor(cy-dotR-2);y<=cy+dotR+2;y++) for(let x=Math.floor(cx-dotR-2);x<=cx+dotR+2;x++){ if(x<0||y<0||x>=W||y>=H) continue; if(Math.hypot(x-cx,y-cy)<=dotR+1) all[y*W+x]=0; }
+      for(let y=Math.floor(cy-R-2);y<=cy+R+2;y++) for(let x=Math.floor(cx-R-2);x<=cx+R+2;x++){ if(x<0||y<0||x>=W||y>=H) continue; const q=Math.hypot(x-cx,y-cy); if(q>=r && q<=R && sil[y*W+x]) all[y*W+x]=1; } } }
+  // where the outline leaked through a gap, the bridge becomes cutting line too
+  { const tt=Math.max(half,want)*2, outRaw=flood(inv(fat)); const leak=new Uint8Array(N); let nl=0; for(let i=0;i<N;i++) if(outRaw[i]&&sil[i]){ leak[i]=1; nl++; }
+    if(nl){ const dl=dist(inv(leak)), dOut=dist(sil); for(let i=0;i<N;i++) if(sil[i]&&dOut[i]<=tt&&dl[i]<=tt*1.5) all[i]=1; } }
+  for(const c of comps(all)) if(c.length<(ppm*1.5)**2) for(const i of c) all[i]=0;
+  { const holes=new Uint8Array(N); for(let i=0;i<N;i++) holes[i]=(sil[i]&&!all[i])?1:0; for(const c of comps(holes)) if(c.length<(ppm*2.5)**2*0.6) for(const i of c) all[i]=1; }
+  // vectorise with smooth curves
+  const tracePolys=(m, omit)=>{ const id={width:W,height:H,data:new Uint8ClampedArray(N*4)}; for(let i=0;i<N;i++){ const v=m[i]?0:255; id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v; id.data[i*4+3]=255; }
+    const td=ImageTracer.imagedataToTracedata(id,{ltres:0.5,qtres:0.5,pathomit:omit,rightangleenhance:false,colorsampling:0,numberofcolors:2,pal:[{r:0,g:0,b:0,a:255},{r:255,g:255,b:255,a:255}],blurradius:0,linefilter:true});
+    const k=td.palette.findIndex(p=>p.r<128); const layer=td.layers[k<0?0:k]||[]; const polys=[];
+    for(const path of layer){ const pts=[]; for(const s of path.segments){ if(s.type==="L"){ pts.push([s.x1,s.y1]); } else { for(let u=0;u<1;u+=0.2){ const a=(1-u)*(1-u), b=2*(1-u)*u, c=u*u; pts.push([a*s.x1+b*s.x2+c*s.x3, a*s.y1+b*s.y2+c*s.y3]); } } }
+      if(pts.length>=3) polys.push(pts); } return polys; };
+  const cx=(x0+x1)/2, cy=(y0+y1)/2, toMM=p=>p.map(q=>[(q[0]-cx)/ppm, (q[1]-cy)/ppm]);
+  const silP=tracePolys(sil, 40).map(toMM), inkP=tracePolys(all, 8).map(toMM);
+  let outline=silP.sort((a,b)=>Math.abs(area(b))-Math.abs(area(a)))[0]; if(!outline) return null;
+  let inkMM=[]; try{ inkMM=inter(clean(inkP, EO), [outline]); }catch(e){ inkMM=[]; }
+  return {outline, ink:inkMM, touchesEdge, ppm};
+}
 function subjectBox(im){
   const iw=im.naturalWidth, ih=im.naturalHeight, sc=Math.min(1,320/Math.max(iw,ih)), W=Math.max(1,Math.round(iw*sc)), H=Math.max(1,Math.round(ih*sc));
   try{ const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const g=cv.getContext("2d",{willReadFrequently:true}); g.drawImage(im,0,0,W,H);
@@ -1561,7 +1628,7 @@ function autoTrace(){
   pushHist(); design.sketch=[]; design.holes=[]; showImage=false; runTrace(); setTool("select"); fitView(); markDirty();
 }
 // ---------- Redraw: an image model turns the upload into a cookie-friendly drawing, which is then traced ----------
-let origImage=null, origURL=null, redrawnFrom=null, redrawJob=0, forceInkTrace=false;
+let origImage=null, origURL=null, redrawnFrom=null, redrawJob=0, forceInkTrace=false, redrawTries=0;
 function redrawStyle(){ const c=window.CUT_IT||{}; return c.REDRAW_STYLE==="color"? "color" : "lineart"; }
 function redrawURL(){ const c=window.CUT_IT||{}; return (c.REDRAW_URL||"").replace(/\/+$/,""); }
 function pictureForUpload(im){   // at most 1024 px, PNG (keeps transparency) or JPEG for photos
@@ -1584,7 +1651,16 @@ async function redraw(){
     await new Promise((ok,bad)=>{ im.onload=ok; im.onerror=()=>bad(new Error("bad picture")); im.src=out.image; });
     if(job!==redrawJob || origURL!==from) return;
     pushHist(); srcImage=im; srcURL=out.image; redrawnFrom=from;
-    design.sketch=[]; design.holes=[]; showImage=false; forceInkTrace=(redrawStyle()==="lineart"); try{ runTrace(); } finally { forceInkTrace=false; } setTool("select"); fitView(); markDirty(); renderSelbar();
+    design.sketch=[]; design.holes=[]; showImage=false;
+    let vd=null; if(redrawStyle()==="lineart"){ try{ vd=vectorDesign(im, sizeMM()); }catch(err){ console.warn(err); vd=null; } }
+    if(vd && vd.touchesEdge && redrawTries<1){ redrawTries++; setBusy(false); return redraw(); }   // drawing ran off the picture: ask for a new one once
+    if(vd && vd.outline && vd.ink.length){
+      design.outline=vd.outline; design.lines=[]; design.blobs=[]; design.holes=[]; design.sketch=[];
+      design.img={k:1/vd.ppm*0+1, tx:0, ty:0, w:im.naturalWidth, h:im.naturalHeight}; design.img=null;
+      design.art={ink:vd.ink, w:0.9, v:(artV++), real:true, vector:true, resnap:true};
+      tracePushed=true; artSync(); render();
+    } else { forceInkTrace=(redrawStyle()==="lineart"); try{ runTrace(); } finally { forceInkTrace=false; } }
+    redrawTries=0; setTool("select"); fitView(); markDirty(); renderSelbar();
   }catch(err){
     if(job!==redrawJob) return;
     console.warn("redraw",err);

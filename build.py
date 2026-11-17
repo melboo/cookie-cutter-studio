@@ -6,6 +6,7 @@ t = (root / "src/template.html").read_text()
 parts = {
     "/*CLIPPER*/": "vendor/clipper.js",
     "/*EARCUT*/": "vendor/earcut.min.js",
+    "/*IMAGETRACER*/": "vendor/imagetracer.js",
     "/*THREE*/": "vendor/three.min.js",
     "/*ORBIT*/": "vendor/OrbitControls.js",
     "/*WASM*/": "vendor/manifold_wasm_b64.js",
