@@ -597,9 +597,11 @@ function cutterReady(d){
     if(O && d.frame && d.frame!=="figure"){ extraLines=[{p:dpClosed(O,0.03),c:true}]; O=frameShape(O, d.frame); }
     if(O && Math.abs(area(O))>20){
       const a0=Math.abs(area(O));
-      let O1=largest(offset(offset([O],RULES.notch,0.04),-RULES.notch,0.04))||O;
+      // a drawing already designed for a cutter keeps its shape: only hairline slots and threads are cleaned up
+      const designed=!!(d.art && d.art.real), notchR=designed? 0.5 : RULES.notch, neckR=designed? 0.9 : RULES.neck;
+      let O1=largest(offset(offset([O],notchR,0.04),-notchR,0.04))||O;
       if(Math.abs(area(O1))-a0>1.5) fixes.push("filled narrow slots");
-      let O2=largest(offset(offset([O1],-RULES.neck,0.04),RULES.neck,0.04));
+      let O2=largest(offset(offset([O1],-neckR,0.04),neckR,0.04));
       if(!O2 || Math.abs(area(O2))<0.5*Math.abs(area(O1))) O2=O1;
       else if(Math.abs(area(O1))-Math.abs(area(O2))>1.5) fixes.push("rounded thin parts");
       O2=dpClosed(O2,0.04);
