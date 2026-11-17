@@ -613,23 +613,29 @@ function cutterReady(d){
         const t=Math.max(d.art.w, sw)*1.2+0.3, core=offset([O2], -t, 0.04);
         let ink=inter(d.art.ink, core);
         ink=offset(offset(ink,-0.25,0.03),0.25,0.03);
-        // keep only ink that belongs to a line or dot of the drawing: scraps of the outline band go
-        { const own=union(strokeLines(d.lines, Math.max(d.art.w,sw)*3.2).concat((d.blobs&&d.blobs.length)?offset(d.blobs,1,0.04):[])); if(own.length) ink=inter(ink, own); ink=offset(offset(ink,-0.25,0.03),0.25,0.03); }
-        // a line that ran into the outline is carried straight on to the blade, in its own direction
-        const reachL=[]; { const dE=q=>{ let b=Infinity; for(let i=0;i<O2.length;i++){ const A=O2[i],B=O2[(i+1)%O2.length]; const r=segDist(q[0],q[1],A[0],A[1],B[0],B[1])[0]; if(r<b) b=r; } return pointInPoly(q,O2)? b : -b; };
-          for(const l of d.lines){ if(l.c||l.p.length<2) continue;
-            for(const e of [0,1]){ const p=e? l.p.slice().reverse() : l.p; if(dE(p[0])>1.6) continue;      // this end was not at the edge
-              let i=0; while(i<p.length-1 && dE(p[i])<t+0.1) i++; if(dE(p[i])<t+0.1) continue;
-              let j=i, run=0; while(j<p.length-1 && run<2.5){ run+=Math.hypot(p[j+1][0]-p[j][0],p[j+1][1]-p[j][1]); j++; }
-              const dx=p[i][0]-p[j][0], dy=p[i][1]-p[j][1], L=Math.hypot(dx,dy); if(L<0.3) continue;
-              let q=p[i].slice(), k2=0; const st=0.25; while(dE(q)>-0.3 && k2++<Math.ceil((3*t+2)/st)) q=[q[0]+dx/L*st, q[1]+dy/L*st];
-              if(k2<Math.ceil((3*t+2)/st)) reachL.push({p:[p[i],q],c:false}); } } }
-        // close to the edge only the line itself stays: fillets and scraps of the outline go
-        { const rimZone=diff([O2], offset([O2], -(t+1.4), 0.04)); const narrow=union(strokeLines(d.lines, sw*1.15).concat((d.blobs&&d.blobs.length)?offset(d.blobs,0.3,0.04):[]));
-          ink=union(diff(ink, rimZone).concat(inter(inter(ink, rimZone), narrow))); ink=offset(offset(ink,-0.25,0.03),0.25,0.03); }
-        const reach=reachL.length? inter(strokeLines(reachL, Math.max(RULES.minLine, sw*0.95)), diff([O2], offset([O2], -(t+0.5), 0.04))) : [];
+        // the drawing's own ink is kept as drawn (not rebuilt from traced centre lines, which can miss pieces);
+        // only small scraps the outline left near the edge go
+        const dE=q=>{ let b=Infinity; for(let i=0;i<O2.length;i++){ const A=O2[i],B=O2[(i+1)%O2.length]; const r=segDist(q[0],q[1],A[0],A[1],B[0],B[1])[0]; if(r<b) b=r; } return b; };
+        { const rimZone=diff([O2], offset([O2], -(t+1.2), 0.04));
+          ink=flatEx(exPolys(ink).filter(e=>!(exArea(e) < 3*sw*sw && netArea(inter([e.outer], rimZone)) > 0.5*Math.abs(area(e.outer))))); }
+        // every line that ran into the outline is joined to the blade, as on the drawing:
+        // where the ink was trimmed off at the edge band, a short bridge of the same width carries it to the edge
+        const reach=[]; { const near=t+0.35, bridges=[];
+          for(const e of exPolys(ink)){ const R=e.outer, n=R.length; if(n<3) continue;
+            const on=R.map(q=>dE(q)<near); if(on.every(Boolean)) continue;
+            let k0=on.findIndex(v=>!v);   // start just after an off-vertex so groups do not wrap
+            for(let k=1;k<=n;k++){ const a=(k0+k)%n; if(!on[a]) continue;
+              const grp=[]; let b=a; while(on[b] && grp.length<n){ grp.push(R[b]); b=(b+1)%n; } k+= grp.length-1;
+              const L=plen(grp); if(L<0.2 || L>3.2*sw) continue;            // a long run along the edge is a line beside it, not an end
+              const m=[(grp[0][0]+grp[grp.length-1][0])/2, (grp[0][1]+grp[grp.length-1][1])/2];
+              let best=[Infinity]; for(let i=0;i<O2.length;i++){ const A=O2[i],B=O2[(i+1)%O2.length]; const r=segDist(m[0],m[1],A[0],A[1],B[0],B[1]); if(r[0]<best[0]) best=r; }
+              if(!(best[0]<t+0.6)) continue;
+              const dx=best[1]-m[0], dy=best[2]-m[1], dd=Math.hypot(dx,dy)||1;
+              const wdt=Math.min(sw*1.15, Math.max(RULES.minLine, Math.hypot(grp[0][0]-grp[grp.length-1][0], grp[0][1]-grp[grp.length-1][1])));
+              bridges.push({p:[[m[0]-dx/dd*0.3, m[1]-dy/dd*0.3],[best[1]+dx/dd*0.6, best[2]+dy/dd*0.6]], c:false, w:wdt}); } }
+          for(const bq of bridges) reach.push(...strokeLines([bq], bq.w)); }
         const thin=strokeLines(d.lines, RULES.minLine);             // nothing thinner than can be printed
-        det=union(ink.concat(reach, inter(thin, offset(ink,0.2,0.04))));
+        det=union(ink.concat(reach.length? union(reach) : [], inter(thin, offset(ink,0.2,0.04))));
         // a ring drawn just inside another ring (a double outline) would bake into one blurred groove: keep the outer one
         { const rings=d.lines.filter(l=>l.c && l.p.length>=4 && plen(l.p.concat([l.p[0]]))<80), drop=[];
           for(const B of rings){
