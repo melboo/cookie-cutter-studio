@@ -20,7 +20,7 @@ Content:
 
 Style:
 - Thick black lines of one even weight, about 2% of the image width, for the outline and every inner line.
-- The outline is one single line. Never draw a second line parallel to it, a border, a halo, a white edge or a sticker edge.
+- The edge of the subject itself is the outline: one single black line drawn exactly on the subject's edge, not around it. Never draw a second line parallel to it, a border, a halo, a white edge, a sticker edge or any shape around the subject.
 - Fill each area with one flat colour. No shading, gradients, highlights, reflections or texture.
 - Leave clear space between lines; two lines never run close and parallel.
 - If the picture shows human anatomy, draw it as a neutral, schematic biology-textbook illustration.
