@@ -1513,7 +1513,7 @@ function setBusy(on){ $("busy").hidden=!on; }
 async function redraw(){
   const base=redrawURL(); if(!base || !origImage) return;
   const job=++redrawJob, from=origURL; setBusy(true);
-  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), 75000);
+  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), 100000);
   try{
     const res=await fetch(base+"/redraw",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:pictureForUpload(origImage)}),signal:ctl.signal});
     const out=await res.json().catch(()=>({}));

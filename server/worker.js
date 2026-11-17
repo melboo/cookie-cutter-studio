@@ -10,19 +10,24 @@
 const MODEL = "gemini-3.1-flash-image";
 const MAX_BYTES = 6 * 1024 * 1024; // largest picture accepted (base64 included)
 
-const PROMPT = `Redraw this picture as a design for a cookie cutter.
+const PROMPT = `Redraw this picture as the design for a 3D-printed cookie cutter that presses lines into the dough.
+The cookie has no colour, so the drawing must read from its black lines alone.
 
-Rules:
-- Keep the main subject only, centred, with its shape and proportions recognisable. Remove text, labels, arrows, leader lines, captions, frames and background objects.
-- The whole subject is one closed, solid silhouette with a thick, smooth black outline of even weight. The silhouette carries the important features (bulges, notches, tips), so it reads even if filled black.
-- Inside, use at most 8 thick black lines of the same weight as the outline. Every line ends on the outline or on another line, so the inside is divided into a few large areas. A small closed ring is fine for an opening or an eye, at most two.
-- Fill each area with one flat, saturated colour. No shading, gradients, highlights, hatching, texture or thin details.
-- Lines and rings never run close and parallel to each other; leave clear space between them.
-- Plain off-white background (#F7F1E3), nothing else in the image.
-- The subject fills most of the image (about 85% of the width or height), with a small even margin.
-- No border, frame, white outline around the silhouette, shadow or sticker edge.
-- Small defining marks (eyes, seeds, a navel) may stay as a few simple solid dots.
-- Flat graphic style with bold black outlines, like a modern flat illustration.
+Keep:
+- The main subject only, centred, filling about 85% of the image width or height.
+- Its real outline, simplified and smooth: one single closed black outline. Keep the bumps, tips and notches that make the shape recognisable.
+- Every detail that makes the subject recognisable, drawn as simple lines or small solid shapes: where parts meet or overlap, eyes, nose, mouth, openings, seeds, scales, plates, pleats, layers, a simple pattern if it is part of the thing (for example a waffle grid or shell plates). Usually 5 to 25 lines and marks.
+
+Remove:
+- Shading, gradients, highlights, reflections, shadows, texture noise and hatching.
+- Text, labels, arrows, leader lines, captions, logos, frames, sparkles, motion marks and background objects.
+- Any second outline, border, halo, white edge or sticker edge around the subject.
+
+Style:
+- All lines black and the same even weight, outline included, like a clean colouring-book line drawing.
+- Leave clear space between lines: two lines never run closer than about twice the line width.
+- Inside the outline, flat light colours are fine; the background is plain off-white (#F7F1E3).
+- If the picture shows human anatomy, draw it as a neutral, schematic biology-textbook illustration.
 - Output an image only.`;
 
 function cors(origin, allowed) {
@@ -81,7 +86,7 @@ export default {
         gen: { responseModalities: ["TEXT", "IMAGE"] } },
     ];
     let why = "";
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       let g = null;
       for (const t of tries) {
         g = await fetch(t.url, {
@@ -106,7 +111,7 @@ export default {
         const d = last.inline_data || last.inlineData;
         return reply({ image: `data:${d.mime_type || d.mimeType || "image/png"};base64,${d.data}` }, 200, h);
       }
-      // no picture: note why (finish reason, block reason, any text) and try once more
+      // no picture: note why (finish reason, block reason, any text) and try again
       const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join(" ").slice(0, 200);
       const block = out.promptFeedback && out.promptFeedback.blockReason;
       why = `no image; finish: ${cand.finishReason || "-"}${block ? "; blocked: " + block : ""}${text ? "; text: " + text : ""}`;

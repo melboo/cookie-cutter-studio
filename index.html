@@ -213,7 +213,7 @@ header .sm{display:none}
     <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="three"></div>
     <div id="selbar"></div>
-    <div id="busy" hidden><div class="card"><div class="dots"><i></i><i></i><i></i></div><b>Making your drawing</b><span>This takes about 10 to 30 seconds.</span><button id="busyCancel">Trace it myself instead</button></div></div>
+    <div id="busy" hidden><div class="card"><div class="dots"><i></i><i></i><i></i></div><b>Making your drawing</b><span>This takes about 10 to 40 seconds.</span><button id="busyCancel">Trace it myself instead</button></div></div>
     <div class="viewtoggle" id="viewtoggle"><button id="v2d">Draw</button><button id="vCookie" class="on">Cookie</button><button id="v3d">3D</button></div>
     <div id="empty"><div class="card">
       <h2>Make a cookie cutter</h2>
@@ -10521,7 +10521,7 @@ function setBusy(on){ $("busy").hidden=!on; }
 async function redraw(){
   const base=redrawURL(); if(!base || !origImage) return;
   const job=++redrawJob, from=origURL; setBusy(true);
-  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), 75000);
+  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), 100000);
   try{
     const res=await fetch(base+"/redraw",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:pictureForUpload(origImage)}),signal:ctl.signal});
     const out=await res.json().catch(()=>({}));
