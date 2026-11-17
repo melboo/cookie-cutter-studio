@@ -1032,7 +1032,7 @@ function render(){
   layers.hits.style.display = cookieView ? "none" : "";
   layers.bars.setAttribute("d", pathD(R.bars||[]));
   try{ layers.wall.setAttribute("d", ro.length?pathD(offset([ro], design.print.base, 0.05).concat([ro.slice().reverse()]).concat(rh).concat(rh.length?offset(rh,-design.print.base,0.05):[])):""); }catch(e){ layers.wall.setAttribute("d",""); }
-  if(art){ try{ layers.wall.setAttribute("d", art.real? pathD(diff([design.outline], offset([design.outline], -Math.max(0.6,art.w*0.9), 0.04))) : ""); }catch(e){ layers.wall.setAttribute("d",""); } }
+  if(art){ try{ layers.wall.setAttribute("d", art.real? pathD(diff([design.outline], offset([design.outline], -(art.vector?1.4:Math.max(0.6,art.w*0.9)), 0.04))) : ""); }catch(e){ layers.wall.setAttribute("d",""); } }
   // raw source (dashed) so people can see what the rules changed
   layers.src.innerHTML="";
   if(!fastRender && o.length && !art){
@@ -1590,19 +1590,44 @@ function vectorDesign(img, sizeMM){
   { const tt=Math.max(half,want)*2, outRaw=flood(inv(fat)); const leak=new Uint8Array(N); let nl=0; for(let i=0;i<N;i++) if(outRaw[i]&&sil[i]){ leak[i]=1; nl++; }
     if(nl){ const dl=dist(inv(leak)), dOut=dist(sil); for(let i=0;i<N;i++) if(sil[i]&&dOut[i]<=tt&&dl[i]<=tt*1.5) all[i]=1; } }
   for(const c of comps(all)) if(c.length<(ppm*1.5)**2) for(const i of c) all[i]=0;
-  { const holes=new Uint8Array(N); for(let i=0;i<N;i++) holes[i]=(sil[i]&&!all[i])?1:0; for(const c of comps(holes)) if(c.length<(ppm*2.5)**2*0.6) for(const i of c) all[i]=1; }
+  { const holes=new Uint8Array(N); for(let i=0;i<N;i++) holes[i]=(sil[i]&&!all[i])?1:0; for(const c of comps(holes)) if(c.length<Math.PI*(0.6*ppm)**2) for(const i of c) all[i]=1; }
+  // the cutting wall: an even 1.4 mm band along the outline. Near the wall only lines that run in from the inside are kept
+  // (they join the band); bulges of the drawn outline (thick corners, lash tips) give way to the even band.
+  { const dO=dist(sil), B=1.4*ppm, T=2.8*ppm, zone=[]; for(let i=0;i<N;i++) if(sil[i]&&dO[i]<=T&&all[i]) zone.push(i);
+    zone.sort((a,b)=>dO[b]-dO[a]); const keep=new Uint8Array(N); for(let i=0;i<N;i++) if(all[i]&&dO[i]>T) keep[i]=1;
+    for(const i of zone){ const x=i%W; for(const j of [i-1,i+1,i-W,i+W,i-W-1,i-W+1,i+W-1,i+W+1]){ if(j<0||j>=N||Math.abs(j%W-x)>1) continue; if(keep[j]&&dO[j]>dO[i]){ keep[i]=1; break; } } }
+    for(let i=0;i<N;i++) all[i]=(keep[i]||(sil[i]&&dO[i]<=B))?1:0; }
+  // much of the drawing outside the cookie means its outline is open: better to ask for a new drawing
+  let outsideInk=0, totInk=0; for(let i=0;i<N;i++) if(ink[i]){ totInk++; if(!sil[i]) outsideInk++; }
+  const openOutline = outsideInk > 0.03*totInk;
   // vectorise with smooth curves
   const tracePolys=(m, omit)=>{ const id={width:W,height:H,data:new Uint8ClampedArray(N*4)}; for(let i=0;i<N;i++){ const v=m[i]?0:255; id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v; id.data[i*4+3]=255; }
     const td=ImageTracer.imagedataToTracedata(id,{ltres:0.5,qtres:0.5,pathomit:omit,rightangleenhance:false,colorsampling:0,numberofcolors:2,pal:[{r:0,g:0,b:0,a:255},{r:255,g:255,b:255,a:255}],blurradius:0,linefilter:true});
     const k=td.palette.findIndex(p=>p.r<128); const layer=td.layers[k<0?0:k]||[]; const polys=[];
     for(const path of layer){ const pts=[]; for(const s of path.segments){ if(s.type==="L"){ pts.push([s.x1,s.y1]); } else { for(let u=0;u<1;u+=0.2){ const a=(1-u)*(1-u), b=2*(1-u)*u, c=u*u; pts.push([a*s.x1+b*s.x2+c*s.x3, a*s.y1+b*s.y2+c*s.y3]); } } }
-      if(pts.length>=3) polys.push(pts); } return polys; };
+      if(pts.length>=3) polys.push(smoothPoly(pts, ppm)); } return polys; };
   const cx=(x0+x1)/2, cy=(y0+y1)/2, toMM=p=>p.map(q=>[(q[0]-cx)/ppm, (q[1]-cy)/ppm]);
   const silP=tracePolys(sil, 40).map(toMM), inkP=tracePolys(all, 8).map(toMM);
   let outline=silP.sort((a,b)=>Math.abs(area(b))-Math.abs(area(a)))[0]; if(!outline) return null;
   let inkMM=[]; try{ inkMM=inter(clean(inkP, EO), [outline]); }catch(e){ inkMM=[]; }
-  return {outline, ink:inkMM, touchesEdge, ppm};
+  return {outline, ink:inkMM, touchesEdge, openOutline, ppm};
 }
+// remove pixel stair-steps from a traced outline but keep real corners sharp: simplify (1 px), then corner cutting
+// that leaves vertices turning more than ~55 degrees alone
+function smoothPoly(pts){
+  const dp=(P,e)=>{ if(P.length<3) return P; const keep=new Uint8Array(P.length); keep[0]=keep[P.length-1]=1; const st=[[0,P.length-1]];
+    while(st.length){ const [a,b]=st.pop(); let m=-1,md=e; const [ax,ay]=P[a],[bx,by]=P[b], L=Math.hypot(bx-ax,by-ay)||1e-9;
+      for(let i=a+1;i<b;i++){ const d=Math.abs((bx-ax)*(ay-P[i][1])-(ax-P[i][0])*(by-ay))/L; if(d>md){ md=d; m=i; } } if(m>0){ keep[m]=1; st.push([a,m],[m,b]); } }
+    return P.filter((_,i)=>keep[i]); };
+  let far=0,fd=0; for(let i=1;i<pts.length;i++){ const d=Math.hypot(pts[i][0]-pts[0][0],pts[i][1]-pts[0][1]); if(d>fd){ fd=d; far=i; } }
+  let P=dp(pts.slice(0,far+1),1).slice(0,-1).concat(dp(pts.slice(far).concat([pts[0]]),1).slice(0,-1)); if(P.length<3) return pts;
+  let sharp=P.map((p,i)=>{ const a=P[(i-1+P.length)%P.length], c=P[(i+1)%P.length], u=[p[0]-a[0],p[1]-a[1]], v=[c[0]-p[0],c[1]-p[1]];
+    return (u[0]*v[0]+u[1]*v[1])/((Math.hypot(u[0],u[1])*Math.hypot(v[0],v[1]))||1) < 0.57; });
+  for(let it=0;it<4;it++){ const R=[], S=[]; for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length];
+      if(sharp[i]){ R.push(a); S.push(true); } else { R.push([0.75*a[0]+0.25*b[0],0.75*a[1]+0.25*b[1]]); S.push(false); }
+      if(!sharp[(i+1)%P.length]){ R.push([0.25*a[0]+0.75*b[0],0.25*a[1]+0.75*b[1]]); S.push(false); } }
+    P=R; sharp=S; }
+  return P; }
 function subjectBox(im){
   const iw=im.naturalWidth, ih=im.naturalHeight, sc=Math.min(1,320/Math.max(iw,ih)), W=Math.max(1,Math.round(iw*sc)), H=Math.max(1,Math.round(ih*sc));
   try{ const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const g=cv.getContext("2d",{willReadFrequently:true}); g.drawImage(im,0,0,W,H);
@@ -1653,7 +1678,7 @@ async function redraw(){
     pushHist(); srcImage=im; srcURL=out.image; redrawnFrom=from;
     design.sketch=[]; design.holes=[]; showImage=false;
     let vd=null; if(redrawStyle()==="lineart"){ try{ vd=vectorDesign(im, sizeMM()); }catch(err){ console.warn(err); vd=null; } }
-    if(vd && vd.touchesEdge && redrawTries<1){ redrawTries++; setBusy(false); return redraw(); }   // drawing ran off the picture: ask for a new one once
+    if(vd && (vd.touchesEdge || vd.openOutline) && redrawTries<1){ redrawTries++; setBusy(false); return redraw(); }   // drawing ran off the picture: ask for a new one once
     if(vd && vd.outline && vd.ink.length){
       design.outline=vd.outline; design.lines=[]; design.blobs=[]; design.holes=[]; design.sketch=[];
       design.img={k:1/vd.ppm*0+1, tx:0, ty:0, w:im.naturalWidth, h:im.naturalHeight}; design.img=null;

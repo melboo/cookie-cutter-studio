@@ -20,6 +20,9 @@ Content:
 - Keep the details that make it recognisable as simple lines and shapes: lines where parts meet or overlap, eyes, nose, mouth, openings, seeds, plates, layers, or a simple pattern that belongs to it.
 - Keep any face exactly as it is: where the eyes look, the shape of the mouth, the eyebrows and the expression. Keep the pose and the character.
 - Never leave out a part of what the subject is (a head or tip, a face, an opening, a limb, a petal); make it bigger and simpler instead. Never add anything that is not in the original.
+- Keep what the subject is. An object stays that object with its own outline (a pad keeps its wings, a bottle stays a bottle); never turn it into an animal, a face or another thing.
+- A busy picture (a crowd, a scene, many small figures) becomes its simplest readable version: at most 3 figures or the single main shape, never a dense pattern of many small people.
+- A subject cut off by the picture edge (a bust, a hand coming in from the side) is closed with a smooth, rounded edge, so the outline goes all the way round.
 
 Drawing rules:
 - Pure black lines on a plain white background. No colour, no grey, no fills, no shading, no texture, no solid black areas. Eyes, pupils, seeds and similar small details are small open circles or small solid dots no bigger than about 3% of the subject's width.
@@ -27,7 +30,9 @@ Drawing rules:
 - Anatomy stays anatomically correct: every part keeps its real shape, position and proportion as in the original (for example the clitoris: glans, body, the two crura and the two vestibular bulbs; the urethral and vaginal openings as simple flat ovals between the bulbs). Simplify how parts are drawn, never what they are; never turn a body part into an object such as a cup, tube or spiral.
 - One fully closed outline. No part of the shape narrower than about 7% of the subject's width; tips are rounded, inside corners slightly rounded.
 - Lines either meet cleanly at one point or stay clearly apart (at least about 4% of the subject's width). Never two lines running alongside each other or on top of each other.
-- About 8 to 15 inner lines in total. Hands become simple mitten shapes. No stray marks.
+- At most about 12 inner lines in total. Hands become simple mitten shapes. No stray marks.
+- Faces: eyes are a simple almond or circle with one small round pupil dot; no eyelashes, no lash flicks, no eye shading. Lips are one closed shape with at most one middle line. Hair is one shape with at most 3 inner lines, never many strands.
+- No hairlines: every line is as bold as the outline. Two lines that would run closer than about 4% of the subject's width become one line.
 - Every line has the same even weight, about 1.5% of the image width, the outline included.
 - The edge of the subject itself is the outline: one single closed line exactly on the subject's edge. Never draw a second line around it, a border, a halo or any shape around the subject.
 - Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape (an eye, a ring, a dot). No gaps, no broken or dashed lines, no loose ends floating in space.
