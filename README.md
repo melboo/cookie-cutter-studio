@@ -12,7 +12,7 @@ The whole app is one file, `index.html`. It runs in the browser with no server a
 ## What it does
 
 - **Just draw.** The outside of the drawing becomes the cookie; everything inside becomes a pressed line. Strokes are smoothed, gaps close, unfinished outlines are completed, and lines are joined to the edge or to each other.
-- **Upload.** A picture is traced into an outline and lines.
+- **Upload.** The picture sits behind the canvas so you can trace over it. If a redraw server is set up (`server/`, see its README), the picture is first redrawn by an image model into a simple, bold drawing, which the app then traces for you; "Trace it myself" goes back to your picture.
 - **Line, pressed area or hole.** Tap a closed shape inside the cookie to choose. A hole gets its own blade.
 - **Always a working cutter.** Thin parts are rounded off, narrow slots are filled, and big pressed areas get stripes so they release from the dough.
 - **3D preview and download.** One watertight `.stl`, mirrored so the cookie is not backwards.

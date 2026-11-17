@@ -1081,12 +1081,16 @@ function renderSelbar(){
       b.appendChild(seg); return;
     }
     const lab=document.createElement("span"); lab.className="lbl"; lab.textContent= !SK().length&&design.outline.length ? "Draw lines inside the cookie." : design.outline.length ? (SK().some(l=>l.c&&!l.shape&&Math.abs(area(l.p))<0.7*Math.abs(area(design.outline))) ? "Tap a shape to change it." : "Keep drawing.") : SK().length ? "Close the shape." : (traceMode() ? "Trace over the picture." : "Draw here."); b.appendChild(lab);
-    if(traceMode() && !SK().length) mk("Make the lines for me", autoTrace, "Find the lines in the picture automatically");
+    if(traceMode() && !SK().length) mk(redrawURL()? "Make the drawing for me" : "Make the lines for me", ()=>{ if(redrawURL()) redraw(); else autoTrace(); }, "Turn the picture into a drawing automatically");
     if(SK().length && !design.outline.length) mk("Wrap a cookie around it",wrapCookie,"Make a cookie shape around what you drew","primary");
     if(SK().length) mk("Clear drawing",()=>{ pushHist(); design.sketch=[]; design.outline=[]; design.lines=[]; design.blobs=[]; render(); markDirty(); },"","clr");
     return;
   }
-  if(!sel){b.classList.remove("show");return;}
+  if(!sel){
+    if(design.art && origImage && redrawnFrom===origURL && !cookieView && !mode3d){ b.classList.add("show");
+      const lab=document.createElement("span"); lab.className="lbl"; lab.textContent="Drawing made from your picture."; b.appendChild(lab);
+      mk("Trace it myself", traceOriginal, "Go back to your picture and trace it yourself"); return; }
+    b.classList.remove("show");return;}
   b.classList.add("show");
   const lab=document.createElement("span"); lab.className="lbl"; lab.textContent= {outline:"Outline",line:"Line",blob:"Pressed area",hole:"Hole"}[sel.kind]; b.appendChild(lab);
   { const o=selObj(); const loop = o && sel.kind!=="outline" && (sel.kind!=="line" || isLoop(o));
@@ -1324,7 +1328,7 @@ const SHAPES={
 };
 function startShape(k){
   pushHist();
-  if(!SK().length){ design.outline=[]; design.lines=[]; design.blobs=[]; design.img=null; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true; }
+  if(!SK().length){ design.outline=[]; design.lines=[]; design.blobs=[]; design.img=null; srcImage=null; srcURL=null; origImage=null; origURL=null; redrawnFrom=null; redrawJob++; setBusy(false); $("srcThumb").hidden=true; $("traceNote").hidden=true; }
   const R=sizeMM()/2; let p=SHAPES[k](R); const n=RULES.neck+0.3, t=RULES.notch+0.3;
   p=largest(offset(offset([p],-n,0.04),n,0.04))||p; p=largest(offset(offset([p],t,0.04),-t,0.04))||p; p=dpClosed(p,0.04);
   design.sketch=design.sketch.filter(l=>!l.shape); design.sketch.unshift({p,c:true,shape:true,k});
@@ -1380,6 +1384,7 @@ function setTool(t){ tool=t; if(t!=="select" && cookieView && typeof setView==="
   svg.style.cursor = t==="pen"?"crosshair": t==="erase"?"cell":"default"; $("hint").textContent=hints[t]; if(t!=="select"){sel=null;selNode=-1;renderNodes();} renderSelbar(); if(layers.frame){ const blank=!design.outline.length&&!SK().length; render(); if(blank&&t==="pen"){ const z=sizeMM(); const r=svg.getBoundingClientRect(); if(r.width){ view.cx=0; view.cy=0; view.ppm=Math.min(r.width,r.height)/(z*1.35); applyView(); } } } }
 document.querySelectorAll(".tool[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
 $("fitBtn").onclick=fitView;
+$("busyCancel").onclick=traceOriginal;
 $("imgToggle").onclick=()=>{showImage=!showImage; render();};
 $("undo").onclick=undo; $("redo").onclick=redo;
 
@@ -1494,13 +1499,48 @@ function startTrace(name){
 function autoTrace(){
   pushHist(); design.sketch=[]; design.holes=[]; showImage=false; runTrace(); setTool("select"); fitView(); markDirty();
 }
+// ---------- Redraw: an image model turns the upload into a cookie-friendly drawing, which is then traced ----------
+let origImage=null, origURL=null, redrawnFrom=null, redrawJob=0;
+function redrawURL(){ const c=window.CUT_IT||{}; return (c.REDRAW_URL||"").replace(/\/+$/,""); }
+function pictureForUpload(im){   // at most 1024 px, PNG (keeps transparency) or JPEG for photos
+  const iw=im.naturalWidth, ih=im.naturalHeight, sc=Math.min(1,1024/Math.max(iw,ih));
+  const cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(iw*sc)); cv.height=Math.max(1,Math.round(ih*sc));
+  const g=cv.getContext("2d"); g.fillStyle="#f7f1e3"; g.fillRect(0,0,cv.width,cv.height); g.drawImage(im,0,0,cv.width,cv.height);
+  const png=cv.toDataURL("image/png"); return png.length<3e6? png : cv.toDataURL("image/jpeg",0.9);
+}
+function setBusy(on){ $("busy").hidden=!on; }
+async function redraw(){
+  const base=redrawURL(); if(!base || !origImage) return;
+  const job=++redrawJob, from=origURL; setBusy(true);
+  const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), 75000);
+  try{
+    const res=await fetch(base+"/redraw",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:pictureForUpload(origImage)}),signal:ctl.signal});
+    const out=await res.json().catch(()=>({}));
+    if(job!==redrawJob) return;
+    if(!res.ok || !out.image || !/^data:image\/(png|jpeg|webp);base64,/.test(out.image)) throw new Error(out.error||("status "+res.status));
+    const im=new Image();
+    await new Promise((ok,bad)=>{ im.onload=ok; im.onerror=()=>bad(new Error("bad picture")); im.src=out.image; });
+    if(job!==redrawJob || origURL!==from) return;
+    pushHist(); srcImage=im; srcURL=out.image; redrawnFrom=from;
+    design.sketch=[]; design.holes=[]; showImage=false; runTrace(); setTool("select"); fitView(); markDirty(); renderSelbar();
+  }catch(err){
+    if(job!==redrawJob) return;
+    console.warn("redraw",err);
+    toast(err.name==="AbortError"? "That took too long. Trace over the picture instead." : "Couldn't make the drawing. Trace over the picture instead.");
+  }finally{ clearTimeout(timer); if(job===redrawJob) setBusy(false); }
+}
+function traceOriginal(){
+  redrawJob++; setBusy(false); if(!origImage) return;
+  srcImage=origImage; srcURL=origURL; redrawnFrom=null; startTrace(design.name);
+}
 function setTraceNote(t, bad){ if(bad && matchMedia("(max-width:860px)").matches) toast(t); const n=$("traceNote"); n.textContent=t; n.className="note"+(bad?" bad":""); n.hidden=false; }
 function loadURL(url, name){
   const im=new Image();
   im.onload=()=>{
     srcImage=im; srcURL=url; $("srcThumb").src=srcURL; $("srcThumb").hidden=false;
     if(name){ design.name=name; $("name").value=name; }
-    tracePushed=false; startTrace(name); showTab("image");
+    tracePushed=false; origImage=im; origURL=url; startTrace(name); showTab("image");
+    if(redrawURL()) redraw();
   };
   im.onerror=()=>toast("Couldn't read that image.");
   im.src=url;
@@ -1557,7 +1597,7 @@ $("widthMm").addEventListener("change",()=>{
   pushHist(); fitReady(design, v); sizeKey="custom"; design.sizeKey="custom"; renderSizes(); render(); fitView(); markDirty();
 });
 $("name").addEventListener("input",()=>{design.name=$("name").value;});
-$("newBtn").onclick=()=>{ startSeen=false; pushHist(); const keepPrint={...design.print}, lw=design.lineW; design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true; $("name").value=design.name; sel=null; render(); fitView(); markDirty(); renderGallery(); setView("edit"); setTool("pen"); };
+$("newBtn").onclick=()=>{ startSeen=false; pushHist(); const keepPrint={...design.print}, lw=design.lineW; design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; srcImage=null; srcURL=null; origImage=null; origURL=null; redrawnFrom=null; redrawJob++; setBusy(false); $("srcThumb").hidden=true; $("traceNote").hidden=true; $("name").value=design.name; sel=null; render(); fitView(); markDirty(); renderGallery(); setView("edit"); setTool("pen"); };
 
 /* =====================================================================
    3D (Manifold: watertight, printable meshes)
@@ -1926,7 +1966,7 @@ function renderGallery(){
 }
 function openDesign(d){
   pushHist();
-  design=JSON.parse(JSON.stringify(d)); design.img=null; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true;
+  design=JSON.parse(JSON.stringify(d)); design.img=null; srcImage=null; srcURL=null; origImage=null; origURL=null; redrawnFrom=null; redrawJob++; setBusy(false); $("srcThumb").hidden=true; $("traceNote").hidden=true;
   $("name").value=design.name; sizeKey=design.sizeKey||"custom"; renderSizes(); syncLineW(); loadPrint(); sel=null; selNode=-1; render(); fitView(); markDirty(); renderGallery();
 }
 async function saveDesign(){
@@ -1993,7 +2033,7 @@ function renderStarters(){
     g.appendChild(card(d,{author:false, open:(dd)=>{
       pushHist(); const pr={...design.print}; design=JSON.parse(JSON.stringify(dd)); design.id=null; design.print=pr;
       if(!sizeObj()){sizeKey="regular";} design.sizeKey=sizeKey; applySizeDefaults(design,sizeObj()); fitReady(design,sizeMM());
-      $("name").value=design.name; sel=null; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true;
+      $("name").value=design.name; sel=null; srcImage=null; srcURL=null; origImage=null; origURL=null; redrawnFrom=null; redrawJob++; setBusy(false); $("srcThumb").hidden=true; $("traceNote").hidden=true;
       renderSizes(); syncLineW(); loadPrint(); render(); fitView(); markDirty(); renderGallery(); }}));
   });
 }

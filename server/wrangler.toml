@@ -1,0 +1,16 @@
+name = "cut-it-redraw"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Pages allowed to use this server (comma separated). Local test pages (localhost) are always allowed.
+ALLOWED_ORIGINS = "https://melboo.github.io"
+
+# At most 6 pictures per minute per visitor, so nobody can run up the Gemini bill.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 6
+  period = 60

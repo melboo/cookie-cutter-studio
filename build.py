@@ -10,6 +10,7 @@ parts = {
     "/*ORBIT*/": "vendor/OrbitControls.js",
     "/*WASM*/": "vendor/manifold_wasm_b64.js",
     "/*MANIFOLD*/": "vendor/manifold_classic.js",
+    "/*CONFIG*/": "src/config.js",
     "/*DATA*/": "src/data.js",
     "/*APP*/": "src/app.js",
 }
