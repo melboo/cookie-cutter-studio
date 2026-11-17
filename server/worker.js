@@ -14,9 +14,15 @@ const PROMPT = `Redraw this picture as a simple, bold, flat illustration of its 
 
 Content:
 - Only the main subject, centred, filling about 85% of the image width or height.
-- No words, letters or numbers anywhere. Remove labels, arrows, pointer lines, captions, logos, frames, sparkles, motion marks, shadows and background objects.
+- No words, letters or numbers anywhere in the image. Remove every label and the thin pointer line that leads to it, and remove arrows, captions, logos, frames, sparkles, motion marks, shadows and background objects.
 - Keep the subject's real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
-- Keep the details that make it recognisable, as simple shapes: lines where parts meet or overlap, eyes, nose, mouth, openings, seeds, plates, layers, or a simple pattern that belongs to it. Usually 5 to 20 of them. Small details become small solid dots.
+- Keep the details that make it recognisable, as simple shapes: lines where parts meet or overlap, eyes, nose, mouth, openings, seeds, plates, layers, or a simple pattern that belongs to it.
+- Keep any face exactly as it is: where the eyes look, the shape of the mouth, the eyebrows and the expression. Keep the pose and the character. Only simplify how they are drawn, never what they show.
+
+Size:
+- The result will be printed small, about 8 cm wide, and pressed into dough. Every detail must still read at that size.
+- Make details large and bold. A detail smaller than about 5% of the subject's width is merged with its neighbour into one bigger shape, or left out if it is not important (for example: a leaf keeps its outline and at most one centre vein; small seeds become a few clear dots).
+- Keep at least about 4% of the subject's width of empty space between any two lines. Fewer, bigger, well-spaced details are better than many small ones. Usually 4 to 15 details in total.
 
 Style:
 - Thick black lines of one even weight, about 2% of the image width, for the outline and every inner line.
