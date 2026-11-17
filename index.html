@@ -10104,6 +10104,7 @@ function renderSelbar(){
   if(!sel){
     if(design.art && origImage && redrawnFrom===origURL && !cookieView && !mode3d){ b.classList.add("show");
       const lab=document.createElement("span"); lab.className="lbl"; lab.textContent="Drawing made from your picture."; b.appendChild(lab);
+      mk("Draw it again", ()=>{ if(origImage){ srcImage=origImage; srcURL=origURL; } redraw(); }, "Make a new drawing from your picture");
       mk("Trace it myself", traceOriginal, "Go back to your picture and trace it yourself"); return; }
     b.classList.remove("show");return;}
   b.classList.add("show");
