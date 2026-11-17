@@ -4,11 +4,29 @@
 // drawing: one bold silhouette, a few thick connected lines, flat colours, no shading or labels.
 // The app then traces that drawing. The Gemini API key lives here as a secret, never in the app.
 //
-// POST /redraw   body: {"image": "data:image/png;base64,..."}
+// POST /redraw   body: {"image": "data:image/png;base64,...", "style": "color" | "lineart"}
 //                reply: {"image": "data:image/png;base64,..."}   or   {"error": "..."}
 
 const MODEL = "gemini-3.1-flash-image";
 const MAX_BYTES = 6 * 1024 * 1024; // largest picture accepted (base64 included)
+
+const PROMPT_LINEART = `Redraw this picture as clean black line art of its main subject.
+
+Content:
+- Only the main subject, centred, filling about 85% of the image width or height.
+- No words, letters or numbers anywhere in the image. Remove every label and the thin pointer line that leads to it, and remove arrows, captions, logos, frames, sparkles, motion marks, shadows and background objects.
+- Keep the subject's real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
+- Keep the details that make it recognisable as simple lines and shapes: lines where parts meet or overlap, eyes, nose, mouth, openings, seeds, plates, layers, or a simple pattern that belongs to it.
+- Keep any face exactly as it is: where the eyes look, the shape of the mouth, the eyebrows and the expression. Keep the pose and the character.
+- Never leave out a part of what the subject is (a head or tip, a face, an opening, a limb, a petal); make it bigger and simpler instead. Never add anything that is not in the original.
+
+Drawing rules:
+- Pure black lines on a plain white background. No colour, no grey, no fills, no shading, no texture. Only pupils, seeds or similar small details may be small solid black dots.
+- Every line has the same even weight, about 1.5% of the image width, the outline included.
+- The edge of the subject itself is the outline: one single closed line exactly on the subject's edge. Never draw a second line around it, a border, a halo or any shape around the subject.
+- Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape (an eye, a ring, a dot). No gaps, no broken or dashed lines, no loose ends floating in space.
+- The result will be printed small, about 8 cm wide. Make every detail large and simple, at least about 5% of the subject's width. Keep at least about 4% of the subject's width of empty space between any two lines. Usually 5 to 20 details in total.
+- Smooth, confident curves, like a minimal icon or a clean colouring-page drawing. Output an image only.`;
 
 const PROMPT = `Redraw this picture as a simple, bold, flat illustration of its main subject.
 
@@ -80,7 +98,8 @@ export default {
     if (m[3].length > MAX_BYTES) return reply({ error: "picture too large" }, 413, h);
 
     // Gemini's REST format has changed between versions; try the current one, then the older one.
-    const parts0 = [{ text: PROMPT }, { inline_data: { mime_type: m[1], data: m[3] } }];
+    const style = body.style === "lineart" ? "lineart" : "color";   // only these two built-in styles
+    const parts0 = [{ text: style === "lineart" ? PROMPT_LINEART : PROMPT }, { inline_data: { mime_type: m[1], data: m[3] } }];
     const tries = [
       { url: `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`,
         gen: { responseModalities: ["IMAGE"], responseFormat: { image: { imageSize: "1K" } } } },

@@ -148,7 +148,7 @@ const r2 = v => Math.round(v*100)/100;
       uniform, printable width (this is what makes imprints look clean)
    ===================================================================== */
 function getTraceOpts(){
-  return {bgTol:+$("bgTol").value, sens:+$("sens").value, src:$("detSrc").value, smooth:+$("smooth").value, spk:+$("spk").value, minLine:+$("detLevel").value};
+  return {bgTol:+$("bgTol").value, sens:+$("sens").value, src:$("detSrc").value, smooth:+$("smooth").value, spk:+$("spk").value, minLine:+$("detLevel").value, forceInk:forceInkTrace};
 }
 function integral(a,W,H){const I=new Float64Array((W+1)*(H+1));for(let y=0;y<H;y++){let s=0;for(let x=0;x<W;x++){s+=a[y*W+x];I[(y+1)*(W+1)+x+1]=I[y*(W+1)+x+1]+s;}}return I;}
 function boxFilter(mask, W, H, r, mode){
@@ -439,6 +439,10 @@ function traceImage(img, o, lineW){
     ch=nd?ch/nd:0; dl=nd?dl/nd:0;
     if(o.debug){ o.debug.otsu.ch=ch; o.debug.otsu.dl=dl; }
     const painted = (m1-m0)>28 && darkFrac>0.1 && darkFrac<0.9 && fatFrac>0.55 && ch>45 && dl>40;
+    // a redrawn line drawing: every black line is copied exactly as drawn
+    if(mode==="auto" && o.forceInk){ const ik=new Uint8Array(N); let ni=0;
+      for(const i of comps[bi]){ const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); if(0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]<110 && c<90){ ik[i]=1; ni++; } }
+      if(ni>n*0.01){ inkMask=ik; mode="ink"; realInk=true; } }
     // flat colours inside drawn black outlines: the black lines themselves are the details
     if(mode==="auto" && painted){ const ik=new Uint8Array(N); let ni=0;
       for(const i of comps[bi]){ const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); if(0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]<62 && c<75){ ik[i]=1; ni++; } }
@@ -1420,10 +1424,10 @@ function runTrace(){
   design.art = r.ink ? {ink:r.ink, w:r.inkW, v:0, real:true, resnap:true} : null;
   if(sizeObj()) fitReady(design, sizeMM());
   artSync();
-  { const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }
+  if(!(design.art && design.art.real)){ const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }   // a copied drawing keeps every line
   // the picture's own ink stays as drawn; only loose flecks that no line runs through go (spurs of the tidy-up are not cut out of it)
   if(design.art && design.art.real){ try{ const own=union(strokeLines(design.lines, design.art.w*1.6).concat(design.blobs.length?offset(design.blobs,0.5,0.04):[]));
-      const ex=exPolys(design.art.ink); const keep=ex.filter(e=>exArea(e)>=20*design.art.w*design.art.w || netArea(inter([e.outer], own))>0.05);
+      const ex=exPolys(design.art.ink); const keep=ex.filter(e=>exArea(e)>=RULES.minArea || netArea(inter([e.outer], own))>0.05);   // only true specks go; every drawn mark stays
       if(keep.length<ex.length) design.art.ink=flatEx(keep); }catch(err){ console.warn(err); } design.art.resnap=true; artSync(); }
   else if(design.art){ design.art.noAdd=true; artSync(); design.art.noAdd=false; }
   if(!design.art){ try{ const lw=design.lineW, O=design.outline;
@@ -1508,7 +1512,8 @@ function autoTrace(){
   pushHist(); design.sketch=[]; design.holes=[]; showImage=false; runTrace(); setTool("select"); fitView(); markDirty();
 }
 // ---------- Redraw: an image model turns the upload into a cookie-friendly drawing, which is then traced ----------
-let origImage=null, origURL=null, redrawnFrom=null, redrawJob=0;
+let origImage=null, origURL=null, redrawnFrom=null, redrawJob=0, forceInkTrace=false;
+function redrawStyle(){ const c=window.CUT_IT||{}; return c.REDRAW_STYLE==="color"? "color" : "lineart"; }
 function redrawURL(){ const c=window.CUT_IT||{}; return (c.REDRAW_URL||"").replace(/\/+$/,""); }
 function pictureForUpload(im){   // at most 1024 px, PNG (keeps transparency) or JPEG for photos
   const iw=im.naturalWidth, ih=im.naturalHeight, sc=Math.min(1,1024/Math.max(iw,ih));
@@ -1522,7 +1527,7 @@ async function redraw(){
   const job=++redrawJob, from=origURL; setBusy(true);
   const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), 100000);
   try{
-    const res=await fetch(base+"/redraw",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:pictureForUpload(origImage)}),signal:ctl.signal});
+    const res=await fetch(base+"/redraw",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:pictureForUpload(origImage), style:redrawStyle()}),signal:ctl.signal});
     const out=await res.json().catch(()=>({}));
     if(job!==redrawJob) return;
     if(!res.ok || !out.image || !/^data:image\/(png|jpeg|webp);base64,/.test(out.image)) throw new Error(out.error||("status "+res.status));
@@ -1530,7 +1535,7 @@ async function redraw(){
     await new Promise((ok,bad)=>{ im.onload=ok; im.onerror=()=>bad(new Error("bad picture")); im.src=out.image; });
     if(job!==redrawJob || origURL!==from) return;
     pushHist(); srcImage=im; srcURL=out.image; redrawnFrom=from;
-    design.sketch=[]; design.holes=[]; showImage=false; runTrace(); setTool("select"); fitView(); markDirty(); renderSelbar();
+    design.sketch=[]; design.holes=[]; showImage=false; forceInkTrace=(redrawStyle()==="lineart"); try{ runTrace(); } finally { forceInkTrace=false; } setTool("select"); fitView(); markDirty(); renderSelbar();
   }catch(err){
     if(job!==redrawJob) return;
     console.warn("redraw",err);
