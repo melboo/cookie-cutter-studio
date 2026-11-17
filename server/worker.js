@@ -24,6 +24,7 @@ Content:
 Drawing rules:
 - Pure black lines on a plain white background. No colour, no grey, no fills, no shading, no texture, no solid black areas. Eyes, pupils, seeds and similar small details are small open circles or small solid dots no bigger than about 3% of the subject's width.
 - Flat front or side view only. No 3D effects: no perspective, no cylinders, no rims, no depth.
+- Anatomy stays anatomically correct: every part keeps its real shape, position and proportion as in the original (for example the clitoris: glans, body, the two crura and the two vestibular bulbs; the urethral and vaginal openings as simple flat ovals between the bulbs). Simplify how parts are drawn, never what they are; never turn a body part into an object such as a cup, tube or spiral.
 - One fully closed outline. No part of the shape narrower than about 7% of the subject's width; tips are rounded, inside corners slightly rounded.
 - Lines either meet cleanly at one point or stay clearly apart (at least about 4% of the subject's width). Never two lines running alongside each other or on top of each other.
 - About 8 to 15 inner lines in total. Hands become simple mitten shapes. No stray marks.
@@ -59,7 +60,7 @@ Style:
 - The edge of the subject itself is the outline: one single black line drawn exactly on the subject's edge, not around it. Never draw a second line parallel to it, a border, a halo, a white edge, a sticker edge or any shape around the subject.
 - Fill each area with one flat colour. No shading, gradients, highlights, reflections or texture.
 - Leave clear space between lines; two lines never run close and parallel.
-- If the picture shows human anatomy, draw it as a neutral, schematic biology-textbook illustration.
+- If the picture shows human anatomy, draw it as a neutral, schematic, anatomically accurate biology-textbook illustration.
 - Plain off-white background (#F7F1E3). Output an image only.`;
 
 // Ask a fast Gemini text model whether the drawing contains any letters. If the check itself fails, the drawing is kept.
