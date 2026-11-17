@@ -19,7 +19,11 @@ Rules:
 - Fill each area with one flat, saturated colour. No shading, gradients, highlights, hatching, texture or thin details.
 - Lines and rings never run close and parallel to each other; leave clear space between them.
 - Plain off-white background (#F7F1E3), nothing else in the image.
-- Flat graphic style with bold outlines, like a sticker or a modern flat illustration.`;
+- The subject fills most of the image (about 85% of the width or height), with a small even margin.
+- No border, frame, white outline around the silhouette, shadow or sticker edge.
+- Small defining marks (eyes, seeds, a navel) may stay as a few simple solid dots.
+- Flat graphic style with bold black outlines, like a modern flat illustration.
+- Output an image only.`;
 
 function cors(origin, allowed) {
   const ok = allowed.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || "");
@@ -76,27 +80,38 @@ export default {
       { url: `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
         gen: { responseModalities: ["TEXT", "IMAGE"] } },
     ];
-    let g = null, why = "";
-    for (const t of tries) {
-      g = await fetch(t.url, {
-        method: "POST",
-        headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: parts0 }], generationConfig: t.gen }),
-      });
-      if (g.ok) break;
-      const txt = await g.text();
-      let msg = txt; try { msg = JSON.parse(txt).error.message || txt; } catch {}
-      why = `Gemini ${g.status}: ${String(msg).slice(0, 300)}`;
+    let why = "";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let g = null;
+      for (const t of tries) {
+        g = await fetch(t.url, {
+          method: "POST",
+          headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: parts0 }], generationConfig: t.gen }),
+        });
+        if (g.ok) break;
+        const txt = await g.text();
+        let msg = txt; try { msg = JSON.parse(txt).error.message || txt; } catch {}
+        why = `Gemini ${g.status}: ${String(msg).slice(0, 300)}`;
+        console.log(why);
+        if (g.status !== 400 && g.status !== 404) break;   // only a format problem is worth another format
+      }
+      if (!g.ok) return reply({ error: g.status === 429 ? "busy, try again in a minute" : "redraw failed", detail: why }, 502, h);
+      const out = await g.json();
+      const cand = (out.candidates && out.candidates[0]) || {};
+      const parts = (cand.content && cand.content.parts) || [];
+      const imgs = parts.filter(p => (p.inline_data || p.inlineData) && !p.thought);
+      const last = imgs[imgs.length - 1];
+      if (last) {
+        const d = last.inline_data || last.inlineData;
+        return reply({ image: `data:${d.mime_type || d.mimeType || "image/png"};base64,${d.data}` }, 200, h);
+      }
+      // no picture: note why (finish reason, block reason, any text) and try once more
+      const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join(" ").slice(0, 200);
+      const block = out.promptFeedback && out.promptFeedback.blockReason;
+      why = `no image; finish: ${cand.finishReason || "-"}${block ? "; blocked: " + block : ""}${text ? "; text: " + text : ""}`;
       console.log(why);
-      if (g.status !== 400 && g.status !== 404) break;   // only a format problem is worth another try
     }
-    if (!g.ok) return reply({ error: g.status === 429 ? "busy, try again in a minute" : "redraw failed", detail: why }, 502, h);
-    const out = await g.json();
-    const parts = (out.candidates && out.candidates[0] && out.candidates[0].content && out.candidates[0].content.parts) || [];
-    const imgs = parts.filter(p => (p.inline_data || p.inlineData) && !p.thought);
-    const last = imgs[imgs.length - 1];
-    if (!last) return reply({ error: "no picture came back" }, 502, h);
-    const d = last.inline_data || last.inlineData;
-    return reply({ image: `data:${d.mime_type || d.mimeType || "image/png"};base64,${d.data}` }, 200, h);
+    return reply({ error: "no picture came back", detail: why }, 502, h);
   },
 };
