@@ -870,7 +870,7 @@ function applyView(){
 }
 function fitView(){
   const r=svg.getBoundingClientRect();
-  const polys=design.outline.length?[design.outline]:[[[-40,-40],[40,40]]];
+  const im=design.img; const polys=design.outline.length?[design.outline]:(im&&srcImage&&showImage? [[[im.tx,im.ty],[im.tx+im.w*im.k,im.ty+im.h*im.k]]] : [[[-40,-40],[40,40]]]);
   const bb=bbox(polys); view.cx=bb.x0+bb.w/2; view.cy=bb.y0+bb.h/2;
   view.ppm=Math.max(0.5, Math.min((r.width-Math.min(120,r.width*0.22))/Math.max(bb.w,20), (r.height-Math.min(150,r.height*0.36))/Math.max(bb.h,20)));
   applyView();
@@ -1015,7 +1015,7 @@ function render(){
     const x=design.img; layers.img.setAttribute("href",srcURL);
     layers.img.setAttribute("x",x.tx); layers.img.setAttribute("y",x.ty);
     layers.img.setAttribute("width",x.w*x.k); layers.img.setAttribute("height",x.h*x.k);
-    layers.img.style.display=""; layers.outline.setAttribute("fill-opacity",.18);
+    layers.img.style.display=""; layers.img.setAttribute("opacity", design.art? .75 : .4); layers.outline.setAttribute("fill-opacity", design.art? .18 : .12);
   } else { layers.img.style.display="none"; layers.outline.setAttribute("fill-opacity",1); }
   { const tm=$("traceMore"); if(tm) tm.hidden=!srcImage; } $("imgToggle").hidden=!(design.img&&srcURL);
   $("empty").style.display = (o.length||design.lines.length||SK().length||startSeen)?"none":"";
@@ -1080,7 +1080,8 @@ function renderSelbar(){
       [["line","Line"],["area","Pressed area"],["hole","Cut-out hole"]].forEach(([k,l])=>{const x=document.createElement("button");x.textContent=l;if(cur===k)x.classList.add("on");x.onclick=()=>setLoopKind(k);seg.appendChild(x);});
       b.appendChild(seg); return;
     }
-    const lab=document.createElement("span"); lab.className="lbl"; lab.textContent= !SK().length&&design.outline.length ? "Draw lines inside the cookie." : design.outline.length ? (SK().some(l=>l.c&&!l.shape&&Math.abs(area(l.p))<0.7*Math.abs(area(design.outline))) ? "Tap a shape to change it." : "Keep drawing.") : SK().length ? "Close the shape." : "Draw here."; b.appendChild(lab);
+    const lab=document.createElement("span"); lab.className="lbl"; lab.textContent= !SK().length&&design.outline.length ? "Draw lines inside the cookie." : design.outline.length ? (SK().some(l=>l.c&&!l.shape&&Math.abs(area(l.p))<0.7*Math.abs(area(design.outline))) ? "Tap a shape to change it." : "Keep drawing.") : SK().length ? "Close the shape." : (traceMode() ? "Trace over the picture." : "Draw here."); b.appendChild(lab);
+    if(traceMode() && !SK().length) mk("Make the lines for me", autoTrace, "Find the lines in the picture automatically");
     if(SK().length && !design.outline.length) mk("Wrap a cookie around it",wrapCookie,"Make a cookie shape around what you drew","primary");
     if(SK().length) mk("Clear drawing",()=>{ pushHist(); design.sketch=[]; design.outline=[]; design.lines=[]; design.blobs=[]; render(); markDirty(); },"","clr");
     return;
@@ -1467,13 +1468,39 @@ function simplifyDrawing(lines, outline, w){
   if(ls.length>12){ const keep=new Set(ls.slice().sort((a,b)=>plen(b.p)-plen(a.p)).slice(0,12)); ls=ls.filter(l=>keep.has(l)); }
   return ls;
 }
+// An uploaded picture sits behind the canvas so the person can trace over it with the pen.
+function traceMode(){ return !!(srcImage && design.img && !design.art && !design.lines.length && !design.outline.length) || !!(srcImage && design.img && SK().length && !design.art); }
+function subjectBox(im){
+  const iw=im.naturalWidth, ih=im.naturalHeight, sc=Math.min(1,320/Math.max(iw,ih)), W=Math.max(1,Math.round(iw*sc)), H=Math.max(1,Math.round(ih*sc));
+  try{ const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const g=cv.getContext("2d",{willReadFrequently:true}); g.drawImage(im,0,0,W,H);
+    const d=g.getImageData(0,0,W,H).data; const at=(x,y)=>{const i=(y*W+x)*4; return [d[i],d[i+1],d[i+2],d[i+3]];};
+    const cs=[at(0,0),at(W-1,0),at(0,H-1),at(W-1,H-1)]; const med=c=>cs.map(q=>q[c]).sort((a,b)=>a-b)[1]; const bg=[med(0),med(1),med(2),med(3)];
+    let x0=W,y0=H,x1=-1,y1=-1;
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const q=at(x,y); const on = bg[3]<128 ? q[3]>40 : (q[3]>40 && Math.abs(q[0]-bg[0])+Math.abs(q[1]-bg[1])+Math.abs(q[2]-bg[2])>60);
+      if(on){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+    if(x1>x0 && y1>y0 && (x1-x0)*(y1-y0)>0.01*W*H) return {x:x0/sc, y:y0/sc, w:(x1-x0+1)/sc, h:(y1-y0+1)/sc};
+  }catch(e){}
+  return {x:0,y:0,w:iw,h:ih};
+}
+function startTrace(name){
+  pushHist(); const keepPrint={...design.print}, lw=design.lineW, nm=name||design.name;
+  design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; if(nm){ design.name=nm; }
+  // the subject (not the empty background around it) is sized to the chosen cookie size
+  const iw=srcImage.naturalWidth, ih=srcImage.naturalHeight, S=(sizeObj()?sizeObj().mm:80), sb=subjectBox(srcImage);
+  const k=S/Math.max(sb.w,sb.h);
+  design.img={k, tx:-(sb.x+sb.w/2)*k, ty:-(sb.y+sb.h/2)*k, w:iw, h:ih};
+  showImage=true; startSeen=true; if(cookieView||mode3d) setView("edit"); setTool("pen"); render(); fitView(); markDirty();
+}
+function autoTrace(){
+  pushHist(); design.sketch=[]; design.holes=[]; showImage=false; runTrace(); setTool("select"); fitView(); markDirty();
+}
 function setTraceNote(t, bad){ if(bad && matchMedia("(max-width:860px)").matches) toast(t); const n=$("traceNote"); n.textContent=t; n.className="note"+(bad?" bad":""); n.hidden=false; }
 function loadURL(url, name){
   const im=new Image();
   im.onload=()=>{
     srcImage=im; srcURL=url; $("srcThumb").src=srcURL; $("srcThumb").hidden=false;
     if(name){ design.name=name; $("name").value=name; }
-    tracePushed=false; design.id=null; showImage=false; runTrace(); if(cookieView||mode3d) setView("edit"); setTool("select"); fitView(); showTab("image");
+    tracePushed=false; startTrace(name); showTab("image");
   };
   im.onerror=()=>toast("Couldn't read that image.");
   im.src=url;
