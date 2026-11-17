@@ -22,7 +22,11 @@ Content:
 - Never leave out a part of what the subject is (a head or tip, a face, an opening, a limb, a petal); make it bigger and simpler instead. Never add anything that is not in the original.
 
 Drawing rules:
-- Pure black lines on a plain white background. No colour, no grey, no fills, no shading, no texture. Only pupils, seeds or similar small details may be small solid black dots.
+- Pure black lines on a plain white background. No colour, no grey, no fills, no shading, no texture, no solid black areas. Eyes, pupils, seeds and similar small details are small open circles or small solid dots no bigger than about 3% of the subject's width.
+- Flat front or side view only. No 3D effects: no perspective, no cylinders, no rims, no depth.
+- One fully closed outline. No part of the shape narrower than about 7% of the subject's width; tips are rounded, inside corners slightly rounded.
+- Lines either meet cleanly at one point or stay clearly apart (at least about 4% of the subject's width). Never two lines running alongside each other or on top of each other.
+- About 8 to 15 inner lines in total. Hands become simple mitten shapes. No stray marks.
 - Every line has the same even weight, about 1.5% of the image width, the outline included.
 - The edge of the subject itself is the outline: one single closed line exactly on the subject's edge. Never draw a second line around it, a border, a halo or any shape around the subject.
 - Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape (an eye, a ring, a dot). No gaps, no broken or dashed lines, no loose ends floating in space.
