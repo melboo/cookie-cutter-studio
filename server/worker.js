@@ -21,8 +21,9 @@ Content:
 
 Size:
 - The result will be printed small, about 8 cm wide, and pressed into dough. Every detail must still read at that size.
-- Make details large and bold. A detail smaller than about 5% of the subject's width is merged with its neighbour into one bigger shape, or left out if it is not important (for example: a leaf keeps its outline and at most one centre vein; small seeds become a few clear dots).
-- Keep at least about 4% of the subject's width of empty space between any two lines. Fewer, bigger, well-spaced details are better than many small ones. Usually 4 to 15 details in total.
+- Make details large and bold. A detail smaller than about 5% of the subject's width is drawn bigger and simpler, or merged with its neighbour into one shape. Only decoration may be left out (for example: a leaf keeps its outline and at most one centre vein; many tiny seeds become a few clear dots).
+- Never leave out a part of what the subject is: a head or tip, a face, an opening, a limb, a petal. Make it bigger and simpler instead.
+- Keep at least about 4% of the subject's width of empty space between any two lines. Fewer, bigger, well-spaced details are better than many small ones, but every part of the subject stays. Usually 5 to 15 details in total.
 
 Style:
 - Thick black lines of one even weight, about 2% of the image width, for the outline and every inner line.
