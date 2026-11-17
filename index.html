@@ -9611,6 +9611,8 @@ function cutterReady(d){
       if(!O2 || Math.abs(area(O2))<0.5*Math.abs(area(O1))) O2=O1;
       else if(Math.abs(area(O1))-Math.abs(area(O2))>1.5) fixes.push("rounded thin parts");
       O2=dpClosed(O2,0.04);
+      // a copied drawing gets a smooth, even cut edge (no small wobbles from the picture)
+      if(d.art && d.art.real){ try{ let q=resample(O2.concat([O2[0]]), 0.35); q.pop(); q=smoothClosed(q, 3, 3); if(q.length>=8){ const s=Math.sqrt(Math.abs(area(O2))/Math.abs(area(q))); const c=bbox([q]), cx=c.x0+c.w/2, cy=c.y0+c.h/2; O2=dpClosed(q.map(p=>[cx+(p[0]-cx)*s, cy+(p[1]-cy)*s]),0.03); } }catch(err){ console.warn(err); } }
       const w=Math.max(RULES.minLine, d.lineW||1.2);
       if((d.lineW||0)<RULES.minLine) fixes.push("widened lines");
       // holes: cut right through. Each gets its own blade, held by the crossbars. Keep a 5 mm wall of cookie around them.
@@ -9656,6 +9658,12 @@ function cutterReady(d){
           for(const bq of bridges) reach.push(...strokeLines([bq], bq.w)); }
         const thin=strokeLines(d.lines, RULES.minLine);             // nothing thinner than can be printed
         det=union(ink.concat(reach.length? union(reach) : [], inter(thin, offset(ink,0.2,0.04))));
+        // knots and nubs where a line meets the edge or another line go: lines stay one even width
+        { const r=Math.max(0.25, sw*0.4); det=offset(offset(det,-r,0.03),r,0.03); }
+        // round shapes (eyes, rings) keep their whole ring, also where they sit on the cookie's edge
+        { const rings=[]; for(const e of exPolys(d.art.ink)) for(const h of e.holes){ const hb=bbox([h]);
+            if(Math.max(hb.w,hb.h)<=18 && Math.max(hb.w,hb.h)>=1.5 && roundness(h)>0.72){ const el=ellipseOf(h); rings.push(...diff(offset([el], Math.max(RULES.minLine, sw), 0.04), [el])); } }
+          if(rings.length) det=union(det.concat(inter(rings, offset([O2], -0.2, 0.04)))); }
         // a ring drawn just inside another ring (a double outline) would bake into one blurred groove: keep the outer one
         { const rings=d.lines.filter(l=>l.c && l.p.length>=4 && plen(l.p.concat([l.p[0]]))<80), drop=[];
           for(const B of rings){
