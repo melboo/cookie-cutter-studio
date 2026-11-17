@@ -82,6 +82,7 @@ select.textin{padding:6px}
 #empty h2{font-weight:900;margin:0 0 8px;font-size:40px;line-height:.95;letter-spacing:-1px;text-transform:uppercase}
 #empty p{margin:0 0 16px;font-family:var(--mono);font-size:13px}
 #empty .note{color:var(--ink)}
+@media (max-width:860px){#empty .card{max-width:calc(100% - 40px);padding:22px 22px;box-shadow:7px 7px 0 var(--ink)} #empty h2{font-size:32px}}
 #stage.drag::after{content:"DROP IT";position:absolute;inset:14px;border:5px dashed var(--ink);display:grid;place-items:center;font-weight:900;font-size:56px;color:var(--ink);background:rgba(230,255,0,.85);z-index:9}
 #panel{border-left:4px solid var(--ink);background:var(--bg);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:4px solid var(--ink)}
@@ -206,9 +207,8 @@ header .sm{display:none}
     <div class="viewtoggle" id="viewtoggle"><button id="v2d">Draw</button><button id="vCookie" class="on">Cookie</button><button id="v3d">3D</button></div>
     <div id="empty"><div class="card">
       <h2>Make a cookie cutter</h2>
-      <p>Upload a drawing, or draw one right here. Dark lines on a light background trace best.</p>
+      <p>Upload a picture or draw one.</p>
       <button class="primary" id="emptyUpload">Upload an image</button> <button class="primary" id="emptyDraw" style="background:#fff">Draw</button>
-      <div class="note" style="margin-top:12px">Or try an example from the Draw tab.</div>
     </div></div>
     <div id="hint"></div>
     <div id="check" style="display:none"></div>

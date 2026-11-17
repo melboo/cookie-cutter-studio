@@ -82,6 +82,7 @@ select.textin{padding:6px}
 #empty h2{font-weight:900;margin:0 0 8px;font-size:40px;line-height:.95;letter-spacing:-1px;text-transform:uppercase}
 #empty p{margin:0 0 16px;font-family:var(--mono);font-size:13px}
 #empty .note{color:var(--ink)}
+@media (max-width:860px){#empty .card{max-width:calc(100% - 40px);padding:22px 22px;box-shadow:7px 7px 0 var(--ink)} #empty h2{font-size:32px}}
 #stage.drag::after{content:"DROP IT";position:absolute;inset:14px;border:5px dashed var(--ink);display:grid;place-items:center;font-weight:900;font-size:56px;color:var(--ink);background:rgba(230,255,0,.85);z-index:9}
 #panel{border-left:4px solid var(--ink);background:var(--bg);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:4px solid var(--ink)}
@@ -206,9 +207,8 @@ header .sm{display:none}
     <div class="viewtoggle" id="viewtoggle"><button id="v2d">Draw</button><button id="vCookie" class="on">Cookie</button><button id="v3d">3D</button></div>
     <div id="empty"><div class="card">
       <h2>Make a cookie cutter</h2>
-      <p>Upload a drawing, or draw one right here. Dark lines on a light background trace best.</p>
+      <p>Upload a picture or draw one.</p>
       <button class="primary" id="emptyUpload">Upload an image</button> <button class="primary" id="emptyDraw" style="background:#fff">Draw</button>
-      <div class="note" style="margin-top:12px">Or try an example from the Draw tab.</div>
     </div></div>
     <div id="hint"></div>
     <div id="check" style="display:none"></div>
@@ -9966,6 +9966,7 @@ function regionFills(R, art){
   if(art) art.fills=out.map(f=>({c:f.fill, p:f.p}));
   regKey=key; regVal=out; return out;
 }
+let startSeen=false;   // the start card stays until the person draws, uploads or taps Draw
 let fastRender=false;
 function render(){
   const o=design.outline;
@@ -10010,7 +10011,7 @@ function render(){
     layers.img.style.display=""; layers.outline.setAttribute("fill-opacity",.18);
   } else { layers.img.style.display="none"; layers.outline.setAttribute("fill-opacity",1); }
   { const tm=$("traceMore"); if(tm) tm.hidden=!srcImage; } $("imgToggle").hidden=!(design.img&&srcURL);
-  $("empty").style.display = (o.length||design.lines.length||SK().length||tool==="pen")?"none":"";
+  $("empty").style.display = (o.length||design.lines.length||SK().length||startSeen)?"none":"";
   if(R.fixes){ renderCheck(R.fixes, R.warns, ro.length>0, R); renderCoach(R); }
   renderFrame(); renderNodes(); renderSelbar(); updDims();
 }
@@ -10145,6 +10146,7 @@ svg.addEventListener("pointerdown", e=>{
   if(e.button!==0) return;
   const m=toMM(e); const t=e.target;
   if(cookieView){ drag={type:"pan",sx:e.clientX,sy:e.clientY,cx:view.cx,cy:view.cy,click:true}; svg.setPointerCapture(e.pointerId); return; }
+  if(tool==="pen" && !startSeen){ startSeen=true; render(); }
   if(tool==="pen"){ drag={type:"pen",pts:[m],cur:m}; svg.setPointerCapture(e.pointerId); return; }
   if(tool==="erase"){ pushHist(); drag={type:"erase",n:0}; eraseAt(e); svg.setPointerCapture(e.pointerId); return; }
   if(t.dataset && t.dataset.node!==undefined){ selNode=+t.dataset.node; pushHist(); drag={type:"node",moved:false}; svg.setPointerCapture(e.pointerId); renderNodes(); return; }
@@ -10521,7 +10523,7 @@ $("widthMm").addEventListener("change",()=>{
   pushHist(); fitReady(design, v); sizeKey="custom"; design.sizeKey="custom"; renderSizes(); render(); fitView(); markDirty();
 });
 $("name").addEventListener("input",()=>{design.name=$("name").value;});
-$("newBtn").onclick=()=>{ pushHist(); const keepPrint={...design.print}, lw=design.lineW; design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true; $("name").value=design.name; sel=null; render(); fitView(); markDirty(); renderGallery(); setView("edit"); setTool("pen"); };
+$("newBtn").onclick=()=>{ startSeen=false; pushHist(); const keepPrint={...design.print}, lw=design.lineW; design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true; $("name").value=design.name; sel=null; render(); fitView(); markDirty(); renderGallery(); setView("edit"); setTool("pen"); };
 
 /* =====================================================================
    3D (Manifold: watertight, printable meshes)
@@ -10970,7 +10972,7 @@ new ResizeObserver(()=>{ if(!mode3d) applyView(); }).observe(svg);
 initCaps();
 $("aiOn").onchange=()=>{ if($("aiOn").checked) scheduleAI(300); else { clearTimeout(aiTimer); $("aiOut").innerHTML=""; } };
 document.querySelectorAll("#shapes button").forEach(b=>b.onclick=()=>startShape(b.dataset.s));
-$("emptyDraw").onclick=()=>setTool("pen");
+$("emptyDraw").onclick=()=>{ startSeen=true; setTool("pen"); render(); };
 $("upBtn").onclick=()=>$("file").click();
 window.__ccs={simplifyDrawing, designPNG, aiCheck, finishPen, sketchBuild, coach, startShape, setView, fromVector, decode, get design(){return design;}, set design(v){design=v;}, traceImage, buildSolids, filesFor, zip, loadURL, setTool, update3d, cutterReady, mfReady, encode, fitReady, sizeMM, render, fitView, getTraceOpts};
 })();

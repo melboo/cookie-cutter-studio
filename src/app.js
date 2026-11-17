@@ -973,6 +973,7 @@ function regionFills(R, art){
   if(art) art.fills=out.map(f=>({c:f.fill, p:f.p}));
   regKey=key; regVal=out; return out;
 }
+let startSeen=false;   // the start card stays until the person draws, uploads or taps Draw
 let fastRender=false;
 function render(){
   const o=design.outline;
@@ -1017,7 +1018,7 @@ function render(){
     layers.img.style.display=""; layers.outline.setAttribute("fill-opacity",.18);
   } else { layers.img.style.display="none"; layers.outline.setAttribute("fill-opacity",1); }
   { const tm=$("traceMore"); if(tm) tm.hidden=!srcImage; } $("imgToggle").hidden=!(design.img&&srcURL);
-  $("empty").style.display = (o.length||design.lines.length||SK().length||tool==="pen")?"none":"";
+  $("empty").style.display = (o.length||design.lines.length||SK().length||startSeen)?"none":"";
   if(R.fixes){ renderCheck(R.fixes, R.warns, ro.length>0, R); renderCoach(R); }
   renderFrame(); renderNodes(); renderSelbar(); updDims();
 }
@@ -1152,6 +1153,7 @@ svg.addEventListener("pointerdown", e=>{
   if(e.button!==0) return;
   const m=toMM(e); const t=e.target;
   if(cookieView){ drag={type:"pan",sx:e.clientX,sy:e.clientY,cx:view.cx,cy:view.cy,click:true}; svg.setPointerCapture(e.pointerId); return; }
+  if(tool==="pen" && !startSeen){ startSeen=true; render(); }
   if(tool==="pen"){ drag={type:"pen",pts:[m],cur:m}; svg.setPointerCapture(e.pointerId); return; }
   if(tool==="erase"){ pushHist(); drag={type:"erase",n:0}; eraseAt(e); svg.setPointerCapture(e.pointerId); return; }
   if(t.dataset && t.dataset.node!==undefined){ selNode=+t.dataset.node; pushHist(); drag={type:"node",moved:false}; svg.setPointerCapture(e.pointerId); renderNodes(); return; }
@@ -1528,7 +1530,7 @@ $("widthMm").addEventListener("change",()=>{
   pushHist(); fitReady(design, v); sizeKey="custom"; design.sizeKey="custom"; renderSizes(); render(); fitView(); markDirty();
 });
 $("name").addEventListener("input",()=>{design.name=$("name").value;});
-$("newBtn").onclick=()=>{ pushHist(); const keepPrint={...design.print}, lw=design.lineW; design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true; $("name").value=design.name; sel=null; render(); fitView(); markDirty(); renderGallery(); setView("edit"); setTool("pen"); };
+$("newBtn").onclick=()=>{ startSeen=false; pushHist(); const keepPrint={...design.print}, lw=design.lineW; design=blankDesign(); design.print=keepPrint; design.lineW=lw; design.sizeKey=sizeKey; srcImage=null; srcURL=null; $("srcThumb").hidden=true; $("traceNote").hidden=true; $("name").value=design.name; sel=null; render(); fitView(); markDirty(); renderGallery(); setView("edit"); setTool("pen"); };
 
 /* =====================================================================
    3D (Manifold: watertight, printable meshes)
@@ -1977,7 +1979,7 @@ new ResizeObserver(()=>{ if(!mode3d) applyView(); }).observe(svg);
 initCaps();
 $("aiOn").onchange=()=>{ if($("aiOn").checked) scheduleAI(300); else { clearTimeout(aiTimer); $("aiOut").innerHTML=""; } };
 document.querySelectorAll("#shapes button").forEach(b=>b.onclick=()=>startShape(b.dataset.s));
-$("emptyDraw").onclick=()=>setTool("pen");
+$("emptyDraw").onclick=()=>{ startSeen=true; setTool("pen"); render(); };
 $("upBtn").onclick=()=>$("file").click();
 window.__ccs={simplifyDrawing, designPNG, aiCheck, finishPen, sketchBuild, coach, startShape, setView, fromVector, decode, get design(){return design;}, set design(v){design=v;}, traceImage, buildSolids, filesFor, zip, loadURL, setTool, update3d, cutterReady, mfReady, encode, fitReady, sizeMM, render, fitView, getTraceOpts};
 })();
