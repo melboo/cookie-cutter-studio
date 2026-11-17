@@ -9623,8 +9623,25 @@ function cutterReady(d){
         const reach=reachL.length? inter(strokeLines(reachL, Math.max(RULES.minLine, sw*0.95)), diff([O2], offset([O2], -(t+0.5), 0.04))) : [];
         const thin=strokeLines(d.lines, RULES.minLine);             // nothing thinner than can be printed
         det=union(ink.concat(reach, inter(thin, offset(ink,0.2,0.04))));
-        // lines that all but touch are pressed as one
-        det=offset(offset(det, 0.3, 0.04), -0.3, 0.04);
+        // a ring drawn just inside another ring (a double outline) would bake into one blurred groove: keep the outer one
+        { const rings=d.lines.filter(l=>l.c && l.p.length>=4 && plen(l.p.concat([l.p[0]]))<80), drop=[];
+          for(const B of rings){
+            const own=union(strokeLines([B], sw*1.8)), rest=diff(det, own); if(!rest.length) continue;
+            // only a ring that sits inside another ring (other lines, or other lines and the edge, close all round it)
+            const wall=exPolys(union(rest.concat(diff([O2], offset([O2], -0.6, 0.04))))); const c0=B.p[0];
+            const enclosed=wall.some(e=>e.holes.some(h=>B.p.every(q=>pointInPoly(q,h)) && Math.abs(area(h)) < 4*Math.abs(area(B.p))));
+            if(!enclosed) continue;
+            const near=exPolys(offset(rest, sw*0.5 + 2*RULES.crowd + 0.9, 0.04));
+            const pts=resample(B.p.concat([B.p[0]]), 0.5); let hit=0;
+            for(const q of pts) if(near.some(e=>pointInPoly(q,e.outer) && !e.holes.some(h=>pointInPoly(q,h)))) hit++;
+            if(hit > 0.6*pts.length) drop.push(B); }
+          if(drop.length){ const others=d.lines.filter(l=>!drop.includes(l));
+            let cut=union(strokeLines(drop, sw*1.7)); if(others.length) cut=diff(cut, union(strokeLines(others, sw*1.15)));
+            det=diff(det, cut); det=offset(offset(det,-0.3,0.03),0.3,0.03);
+            det=flatEx(exPolys(det).filter(e=>exArea(e)>=RULES.minArea));
+            fixes.push("double ring made single"); } }
+        // lines that run closer than the dough can hold are pressed as one groove there
+        det=offset(offset(det, RULES.crowd, 0.04), -RULES.crowd, 0.04);
         det=offset(offset(det,-0.2,0.03),0.2,0.03); }catch(err){ console.warn(err); } }
       if(det.length && holes.length) det=diff(det, offset(holes, 1.2, 0.04));
       if(det.length){
@@ -9864,21 +9881,54 @@ function artSync(){
   const removed=a.snap.filter(k=>!has.has(k)).map(k=>{const v=JSON.parse(k); return {p:v[0],c:v[1]};});
   const added=cur.filter(k=>!had.has(k)).map(k=>{const v=JSON.parse(k); return {p:v[0],c:v[1]};});
   const remB=a.bSnap.filter(k=>!hasB.has(k)).map(k=>JSON.parse(k)), addB=curB.filter(k=>!hadB.has(k)).map(k=>JSON.parse(k));
+  // a line that was only nudged (snapped onto a neighbour, smoothed) is not a change to the drawing
+  { const far=(P,Q)=>{ let m=0; for(const q of P){ let b=Infinity; for(let k=0;k+1<Q.length;k++){ const r=segDist(q[0],q[1],Q[k][0],Q[k][1],Q[k+1][0],Q[k+1][1])[0]; if(r<b) b=r; } if(b>m) m=b; } return m; };
+    const tol=Math.max(0.8, (a.w||1)*0.9);
+    for(let i=removed.length-1;i>=0;i--){ const r=removed[i]; const j=added.findIndex(x=>far(r.p,x.p)<tol && far(x.p,r.p)<tol); if(j>=0){ removed.splice(i,1); added.splice(j,1); } } }
   if(removed.length||added.length||remB.length||addB.length){
     try{ let per=0; for(const p of a.ink) per+=plen(p.concat([p[0]])); const w=Math.max(a.w, per>0? 2*netArea(a.ink)/per : 0); let ink=a.ink;
-      const rem=union(strokeLines(removed,w*1.3+0.9).concat(remB.length?offset(remB,0.5,0.04):[]));
-      if(rem.length){ let cut=added.length? diff(rem, union(strokeLines(added,w*1.3+1.3))) : rem;
-        cut=offset(offset(cut,-0.35,0.04),0.35,0.04);   // a line that only moved a hair is not a removal
-        if(a.real) cut=inter(cut, offset([design.outline], -(Math.max(w,1.5)*1.4), 0.04)); // the outer outline of the drawing is never cut
-        if(cut.length){ const others=design.lines.filter(l=>!added.some(x=>x.p===l.p));
-          const heal=inter(union(strokeLines(design.lines,w*0.85)), cut);
-          ink=diff(ink,cut); if(heal.length) ink=union(ink.concat(heal));
-          // crumbs of the removed line that the cut left behind go too
-          const nearCut=offset(cut, w*1.5, 0.05); const keep=[];
-          for(const e of exPolys(ink)){ if(exArea(e) < 8*w*w && netArea(inter([e.outer], nearCut)) > 0.5*Math.abs(area(e.outer))) continue; keep.push(e); }
+      // ink that belonged to a removed line goes: every bit of ink near it is given to whichever line it is closest to
+      // (a removed one, a line that stays, or the drawing's outer outline), so joins and the outline stay whole
+      const W2=w*2.4+0.6;
+      const rem=union(strokeLines(removed,W2).concat(remB.length?offset(remB,0.5,0.04):[]));
+      let cut=[];
+      if(rem.length){
+        const keepL=design.lines.filter(l=>!added.some(x=>x.p===l.p)).concat(added);
+        const segs=ls=>{ const o=[]; for(const l of ls){ const n=l.p.length; for(let k=0;k+1<n||(l.c&&k<n);k++){ const u=l.p[k], v=l.p[(k+1)%n]; o.push([u[0],u[1],v[0],v[1]]); } } return o; };
+        const S_s=segs(keepL), S_o=[];
+        // only the parts of the old lines that no line covers any more count as removed
+        const S_r=[]; for(const g of segs(removed)){ const n=Math.max(1,Math.ceil(Math.hypot(g[2]-g[0],g[3]-g[1])/0.3));
+          for(let k=0;k<n;k++){ const t0=k/n, t1=(k+1)/n, x=g[0]+(g[2]-g[0])*(t0+t1)/2, y=g[1]+(g[3]-g[1])*(t0+t1)/2; let b=Infinity; for(const h of S_s){ const r=segDist(x,y,h[0],h[1],h[2],h[3])[0]; if(r<b){ b=r; if(b<0.3) break; } }
+            if(b>=0.3) S_r.push([g[0]+(g[2]-g[0])*t0, g[1]+(g[3]-g[1])*t0, g[0]+(g[2]-g[0])*t1, g[1]+(g[3]-g[1])*t1]); } } for(const O of exPolys(ink).map(e=>e.outer)) for(let k=0;k<O.length;k++){ const u=O[k], v=O[(k+1)%O.length]; S_o.push([u[0],u[1],v[0],v[1]]); }
+        const remBlobs=remB.map(p=>p);
+        const dmin=(S,x,y)=>{ let b=Infinity; for(const g of S){ const r=segDist(x,y,g[0],g[1],g[2],g[3])[0]; if(r<b) b=r; } return b; };
+        const remR=S_r.length? union(strokeLines(S_r.map(g=>({p:[[g[0],g[1]],[g[2],g[3]]],c:false})), W2)) : [];
+        const remAll=union(remR.concat(remB.length?offset(remB,0.5,0.04):[])); const zone=remAll.length? inter(ink, offset(remAll, w*0.8, 0.04)) : []; const bb=bbox(zone.length?zone:rem); const res=0.08, pad=0.2;
+        const x0=bb.x0-pad, y0=bb.y0-pad, GW=Math.ceil((bb.w+2*pad)/res), GH=Math.ceil((bb.h+2*pad)/res);
+        if(zone.length && GW*GH<2.5e6){
+          const zex=exPolys(zone), mask=new Uint8Array(GW*GH);
+          for(let gy=0;gy<GH;gy++) for(let gx=0;gx<GW;gx++){ const x=x0+(gx+0.5)*res, y=y0+(gy+0.5)*res;
+            if(!zex.some(e=>pointInPoly([x,y],e.outer) && !e.holes.some(h=>pointInPoly([x,y],h)))) continue;
+            let dr=dmin(S_r,x,y); if(remBlobs.length && remBlobs.some(p=>pointInPoly([x,y],p))) dr=0;
+            const ds=dmin(S_s,x,y), dout=a.real? Math.abs(dmin(S_o,x,y)-w/2) : Infinity;
+            const dk=Math.min(ds, dout); if(dk <= 0.5*w) continue;   // the body of a line that stays is never cut
+            if(dr + 0.3*w < dk || (dr < ds && dout > w*0.9) || (dk > w*0.62+0.15 && dr < w*2.2)) mask[gy*GW+gx]=1; }
+          cut=traceLoops(mask,GW,GH).filter(l=>l.length>=4).map(l=>l.map(q=>[x0+q[0]*res, y0+q[1]*res]));
+          cut=union(cut);
+        }
+        if(cut.length){
+          ink=diff(ink, offset(cut, 0.04, 0.03));
+          // crumbs the cut left behind go too
+          const nearCut=offset(cut, w*0.8, 0.05), keep=[];
+          const nearCut2=offset(cut, w*3, 0.05);
+          for(const e of exPolys(ink)){ if(exArea(e) < 8*w*w && netArea(inter([e.outer], nearCut2)) > 0.3*Math.abs(area(e.outer))) continue; keep.push(e); }
           ink=flatEx(keep);
-          const zone=inter(ink, nearCut); if(zone.length){ const r=0.32*w; ink=union(diff(ink, nearCut).concat(offset(offset(zone,-r,0.03),r,0.03))); } } }
-      let add=a.noAdd? [] : strokeLines(added,w).concat(addB);   // tidying a fresh trace only ever takes ink away
+          const zn=inter(ink, nearCut); if(zn.length){ const r=0.3*w; let z=offset(offset(zn,-r,0.03),r,0.03); z=offset(offset(z,0.25*w,0.03),-0.25*w,0.03); ink=union(diff(ink, nearCut).concat(inter(z, offset(zn,0.02,0.03)))); }
+        }
+      }
+      // a piece left over from rubbing out part of a line is already drawn: only new lines add ink
+      const fresh=added.filter(x=>!removed.some(r=>{ let ok=true; for(const q of x.p){ let b=Infinity; for(let k=0;k+1<r.p.length||(r.c&&k<r.p.length);k++){ const u=r.p[k], v=r.p[(k+1)%r.p.length]; const d2=segDist(q[0],q[1],u[0],u[1],v[0],v[1])[0]; if(d2<b) b=d2; } if(b>0.3){ ok=false; break; } } return ok; }));
+      let add=a.noAdd? [] : strokeLines(fresh,w).concat(addB);   // tidying a fresh trace only ever takes ink away
       if(add.length){ add=inter(union(add), [design.outline]); ink=union(ink.concat(add)); } // nothing pokes out of the drawing
       a.ink=ink.filter(p=>Math.abs(area(p))>=0.2); a.v=(artV++);
     }catch(err){ console.warn(err); }
@@ -10146,8 +10196,17 @@ function eraseAt(e){
       for(const q of P){ if(Math.hypot(q[0]-m[0],q[1]-m[1])<r){ hit=true; if(cur.length>1) out.push({p:dp(cur,0.05),c:false}); cur=[]; } else cur.push(q); }
       if(!hit){ out.push(l); continue; } ch=true; if(cur.length>1) out.push({p:dp(cur,0.05),c:false}); }
     if(ch){ design.sketch=out; drag.n++; sketchBuild(); sel=null; render(); } return; }
-  const t=document.elementFromPoint(e.clientX,e.clientY);
-  if(t && t.dataset && (t.dataset.kind==="line"||t.dataset.kind==="blob")){ const i=+t.dataset.i; if(t.dataset.kind==="line") design.lines.splice(i,1); else design.blobs.splice(i,1); drag.n++; sel=null; render(); }
+  // lines: rub out only the part under the eraser
+  { const m=toMM(e), r=Math.max(1.2, 9/view.ppm); let ch=false; const out=[];
+    for(const l of design.lines){ const P=resample(l.c?l.p.concat([l.p[0]]):l.p, 0.4);
+      if(!P.some(q=>Math.hypot(q[0]-m[0],q[1]-m[1])<r)){ out.push(l); continue; }
+      ch=true; let cur=[]; const pieces=[];
+      for(const q of P){ if(Math.hypot(q[0]-m[0],q[1]-m[1])<r){ if(cur.length>1) pieces.push(cur); cur=[]; } else cur.push(q); }
+      if(cur.length>1) pieces.push(cur);
+      if(l.c && pieces.length>=2){ const a=pieces[0], z=pieces[pieces.length-1]; if(Math.hypot(a[0][0]-P[0][0],a[0][1]-P[0][1])<1e-6 && Math.hypot(z[z.length-1][0]-P[P.length-1][0],z[z.length-1][1]-P[P.length-1][1])<1e-6){ pieces[0]=z.concat(a.slice(1)); pieces.pop(); } }
+      for(const pc of pieces) if(plen(pc)>=1.2) out.push({p:dp(pc,0.05),c:false}); }
+    const nb=design.blobs.filter(p=>!(pointInPoly(m,p) || p.some(q=>Math.hypot(q[0]-m[0],q[1]-m[1])<r))); if(nb.length!==design.blobs.length) ch=true;
+    if(ch){ design.lines=out; design.blobs=nb; drag.n++; sel=null; render(); } }
 }
 svg.addEventListener("dblclick", e=>{
   if(tool!=="select") return; const o=selObj(); if(!o) return; const m=toMM(e); const p=o.p;
@@ -10339,7 +10398,11 @@ function runTrace(){
   if(sizeObj()) fitReady(design, sizeMM());
   artSync();
   { const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }
-  if(design.art){ design.art.noAdd=true; artSync(); design.art.noAdd=false; }
+  // the picture's own ink stays as drawn; only loose flecks that no line runs through go (spurs of the tidy-up are not cut out of it)
+  if(design.art && design.art.real){ try{ const own=union(strokeLines(design.lines, design.art.w*1.6).concat(design.blobs.length?offset(design.blobs,0.5,0.04):[]));
+      const ex=exPolys(design.art.ink); const keep=ex.filter(e=>exArea(e)>=20*design.art.w*design.art.w || netArea(inter([e.outer], own))>0.05);
+      if(keep.length<ex.length) design.art.ink=flatEx(keep); }catch(err){ console.warn(err); } design.art.resnap=true; artSync(); }
+  else if(design.art){ design.art.noAdd=true; artSync(); design.art.noAdd=false; }
   if(!design.art){ try{ const lw=design.lineW, O=design.outline;
       const ring=diff([O], offset([O], -1.25*lw, 0.04));
       design.art={ink:inter(union(strokeLines(design.lines,lw).concat(design.blobs, ring)), [O]), w:lw, v:0, real:false, resnap:true}; }catch(err){ console.warn(err); design.art=null; } }
