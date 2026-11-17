@@ -9450,7 +9450,14 @@ function traceImage(img, o, lineW){
     // a redrawn line drawing: every black line is copied exactly as drawn
     if(mode==="auto" && o.forceInk){ const ik=new Uint8Array(N); let ni=0;
       for(const i of comps[bi]){ const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); if(0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]<110 && c<90){ ik[i]=1; ni++; } }
-      if(ni>n*0.01){ inkMask=ik; mode="ink"; realInk=true; } }
+      if(ni>n*0.01){
+        // thin lines are brought up to one even, bold weight (about 1.1 mm at the cookie size), the way a cutter needs them;
+        // the drawing itself is not changed, only its line weight
+        const dti=distTransform(ik,W,H), hw=[]; for(const i of comps[bi]) if(ik[i]) hw.push(dti[i]); hw.sort((p,q)=>p-q);
+        const lineHalf=hw.length? hw[Math.floor(hw.length*0.9)] : 0, want=0.55*pxPerMM;
+        if(lineHalf>0 && lineHalf<want){ const inv=new Uint8Array(N); for(let i=0;i<N;i++) inv[i]=ik[i]?0:1;
+          const dd=distTransform(inv,W,H), r=want-lineHalf; for(const i of comps[bi]) if(!ik[i] && dd[i]<=r) ik[i]=1; }
+        inkMask=ik; mode="ink"; realInk=true; } }
     // flat colours inside drawn black outlines: the black lines themselves are the details
     if(mode==="auto" && painted){ const ik=new Uint8Array(N); let ni=0;
       for(const i of comps[bi]){ const c=Math.max(Rb[i],Gb[i],Bb[i])-Math.min(Rb[i],Gb[i],Bb[i]); if(0.299*Rb[i]+0.587*Gb[i]+0.114*Bb[i]<62 && c<75){ ik[i]=1; ni++; } }
