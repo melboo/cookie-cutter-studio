@@ -9633,7 +9633,7 @@ function cutterReady(d){
               let q=p[i].slice(), k2=0; const st=0.25; while(dE(q)>-0.3 && k2++<Math.ceil((3*t+2)/st)) q=[q[0]+dx/L*st, q[1]+dy/L*st];
               if(k2<Math.ceil((3*t+2)/st)) reachL.push({p:[p[i],q],c:false}); } } }
         // close to the edge only the line itself stays: fillets and scraps of the outline go
-        { const rimZone=diff([O2], offset([O2], -(t+1.4), 0.04)); const narrow=union(strokeLines(d.lines, sw*1.15));
+        { const rimZone=diff([O2], offset([O2], -(t+1.4), 0.04)); const narrow=union(strokeLines(d.lines, sw*1.15).concat((d.blobs&&d.blobs.length)?offset(d.blobs,0.3,0.04):[]));
           ink=union(diff(ink, rimZone).concat(inter(inter(ink, rimZone), narrow))); ink=offset(offset(ink,-0.25,0.03),0.25,0.03); }
         const reach=reachL.length? inter(strokeLines(reachL, Math.max(RULES.minLine, sw*0.95)), diff([O2], offset([O2], -(t+0.5), 0.04))) : [];
         const thin=strokeLines(d.lines, RULES.minLine);             // nothing thinner than can be printed
@@ -9655,8 +9655,9 @@ function cutterReady(d){
             det=diff(det, cut); det=offset(offset(det,-0.3,0.03),0.3,0.03);
             det=flatEx(exPolys(det).filter(e=>exArea(e)>=RULES.minArea));
             fixes.push("double ring made single"); } }
-        // lines that run closer than the dough can hold are pressed as one groove there
-        det=offset(offset(det, RULES.crowd, 0.04), -RULES.crowd, 0.04);
+        // hairline gaps between lines are sealed; wider gaps stay as drawn (the check warns if they are too close),
+        // so the cutter never presses a solid patch the drawing does not show
+        det=offset(offset(det, 0.3, 0.04), -0.3, 0.04);
         det=offset(offset(det,-0.2,0.03),0.2,0.03); }catch(err){ console.warn(err); } }
       if(det.length && holes.length) det=diff(det, offset(holes, 1.2, 0.04));
       if(det.length){
