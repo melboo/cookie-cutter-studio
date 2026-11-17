@@ -26,6 +26,8 @@ Drawing rules:
 - The edge of the subject itself is the outline: one single closed line exactly on the subject's edge. Never draw a second line around it, a border, a halo or any shape around the subject.
 - Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape (an eye, a ring, a dot). No gaps, no broken or dashed lines, no loose ends floating in space.
 - The result will be printed small, about 8 cm wide. Make every detail large and simple, at least about 5% of the subject's width. Keep at least about 4% of the subject's width of empty space between any two lines. Usually 5 to 20 details in total.
+- Parts that stick out (a stem, a stalk, a tail, an antenna, a handle) are drawn as a solid shape at least about 6% of the subject's width thick, firmly joined to the body, never as a single thin line. Pointed tips (ears, horns, leaves) are slightly rounded.
+- Round things (eyes, pupils, dots, openings, rings) are drawn as clean, regular circles or ovals.
 - Smooth, confident curves, like a minimal icon or a clean colouring-page drawing. Output an image only.`;
 
 const PROMPT = `Redraw this picture as a simple, bold, flat illustration of its main subject.

@@ -374,7 +374,7 @@ function traceImage(img, o, lineW){
     }
   }
   // label lines, text and whiskers hanging off the shape would only become spikes
-  { const op=boxFilter(boxFilter(fg,W,H,shave,"ero"),W,H,shave,"dil"); let n0=0,n1=0; for(let i=0;i<N;i++){ n0+=fg[i]; if(op[i]&&fg[i]) n1++; }
+  if(!o.forceInk){ const op=boxFilter(boxFilter(fg,W,H,shave,"ero"),W,H,shave,"dil"); let n0=0,n1=0; for(let i=0;i<N;i++){ n0+=fg[i]; if(op[i]&&fg[i]) n1++; }
     if(n1>n0*0.5){ for(let i=0;i<N;i++) fg[i]=op[i]&&fg[i]?1:0; } }
   const {lab, comps}=components(fg,W,H,false);
   if(!comps.length) return null;
@@ -577,7 +577,7 @@ function traceImage(img, o, lineW){
     else if(autoSrc && mode==="lines" && !inkMode && !invert && cover>0.004){ pix=new Uint8Array(N); for(const i of comps[bi]){ if(dark[i] || (!inner[i] && L[i]<110)) pix[i]=1; } }
     if(pix){ let np=0; for(let i=0;i<N;i++) np+=pix[i]; const frac=np/comps[bi].length;
       if(frac>0.02 && frac<0.6){
-        const loops=traceLoops(pix,W,H).filter(l=>l.length>=8).map(l=>dpClosed(smoothClosed(l,2,2),0.3)).filter(l=>l.length>=3);
+        const loops=traceLoops(pix,W,H).filter(l=>l.length>=8).map(l=>dpClosed(smoothClosed(l,3,3),0.25)).filter(l=>l.length>=3);
         ink=clean(loops.map(T),EO).filter(p=>Math.abs(area(p))>=0.25); inkW=Math.max(0.8, 2*hw*k); if(!ink.length) ink=null; } }
   }catch(err){ console.warn(err); ink=null; }
   return {outline, lines, blobs, imgX, ink, inkW, info:{mode, cover, useAlpha, bg, dropped, subject:subjectMode}};
@@ -621,7 +621,8 @@ function cutterReady(d){
       if(d.art && d.art.real && d.art.ink.length && !extraLines.length){ try{
         // how thick the drawing's strokes really are: area / half the perimeter
         let per=0; for(const p of d.art.ink) per+=plen(p.concat([p[0]])); const sw=per>0? 2*netArea(d.art.ink)/per : d.art.w;
-        const t=Math.max(d.art.w, sw)*1.2+0.3, core=offset([O2], -t, 0.04);
+        // the drawn edge (before rounding thin tips) decides what is outline ink, so a rounded tip leaves no stray line behind
+        const t=Math.max(d.art.w, sw)*1.2+0.3, core=inter(offset([O], -t, 0.04), offset([O2], -0.6, 0.04));
         let ink=inter(d.art.ink, core);
         ink=offset(offset(ink,-0.25,0.03),0.25,0.03);
         // the drawing's own ink is kept as drawn (not rebuilt from traced centre lines, which can miss pieces);
@@ -1014,7 +1015,7 @@ function render(){
   layers.hits.style.display = cookieView ? "none" : "";
   layers.bars.setAttribute("d", pathD(R.bars||[]));
   try{ layers.wall.setAttribute("d", ro.length?pathD(offset([ro], design.print.base, 0.05).concat([ro.slice().reverse()]).concat(rh).concat(rh.length?offset(rh,-design.print.base,0.05):[])):""); }catch(e){ layers.wall.setAttribute("d",""); }
-  if(art) layers.wall.setAttribute("d","");
+  if(art){ try{ layers.wall.setAttribute("d", art.real? pathD(diff([design.outline], offset([design.outline], -Math.max(0.6,art.w*0.9), 0.04))) : ""); }catch(e){ layers.wall.setAttribute("d",""); } }
   // raw source (dashed) so people can see what the rules changed
   layers.src.innerHTML="";
   if(!fastRender && o.length && !art){
@@ -1430,6 +1431,7 @@ function runTrace(){
   design.img={k:r.imgX.k, tx:r.imgX.tx, ty:r.imgX.ty, w:srcImage.naturalWidth, h:srcImage.naturalHeight};
   design.art = r.ink ? {ink:r.ink, w:r.inkW, v:0, real:true, resnap:true} : null;
   if(sizeObj()) fitReady(design, sizeMM());
+  if(design.art && design.art.real){ try{ design.art.ink=roundShapes(design.art.ink); }catch(err){ console.warn(err); } }
   artSync();
   if(!(design.art && design.art.real)){ const n0=design.lines.length; try{ design.lines=simplifyDrawing(design.lines, design.outline, design.lineW); }catch(err){ console.warn(err); } traceTidied=n0-design.lines.length; }   // a copied drawing keeps every line
   // the picture's own ink stays as drawn; only loose flecks that no line runs through go (spurs of the tidy-up are not cut out of it)
@@ -1494,6 +1496,36 @@ function simplifyDrawing(lines, outline, w){
 }
 // An uploaded picture sits behind the canvas so the person can trace over it with the pen.
 function traceMode(){ return !!(srcImage && design.img && !design.art && !design.lines.length && !design.outline.length) || !!(srcImage && design.img && SK().length && !design.art); }
+// Clean geometry for a copied drawing: round things become truly round (eyes, pupils, dots, rings),
+// the way a designer would draw them for a cutter.
+function ellipseOf(p, n=72){
+  let cx=0, cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;
+  let sxx=0, syy=0, sxy=0; for(const q of p){ const x=q[0]-cx, y=q[1]-cy; sxx+=x*x; syy+=y*y; sxy+=x*y; } sxx/=p.length; syy/=p.length; sxy/=p.length;
+  const tr=sxx+syy, det=sxx*syy-sxy*sxy, disc=Math.sqrt(Math.max(0,tr*tr/4-det)), l1=tr/2+disc, l2=Math.max(1e-6,tr/2-disc);
+  const ang=0.5*Math.atan2(2*sxy, sxx-syy); let a=Math.sqrt(2*l1), b=Math.sqrt(2*l2);
+  const A=Math.abs(area(p)), s=Math.sqrt(A/(Math.PI*a*b)); a*=s; b*=s;       // same area as the drawn shape
+  const out=[]; for(let i=0;i<n;i++){ const th=2*Math.PI*i/n, x=a*Math.cos(th), y=b*Math.sin(th); out.push([cx+x*Math.cos(ang)-y*Math.sin(ang), cy+x*Math.sin(ang)+y*Math.cos(ang)]); }
+  return area(out)*area(p)<0 ? out.reverse() : out;
+}
+function roundness(p){ const A=Math.abs(area(p)), P=plen(p.concat([p[0]])); return P>0? 4*Math.PI*A/(P*P) : 0; }
+function roundShapes(ink, maxMM=18){
+  const out=[];
+  for(const e of exPolys(ink)){ const bb=bbox([e.outer]);
+    const outer = (Math.max(bb.w,bb.h)<=maxMM && roundness(e.outer)>0.8) ? ellipseOf(e.outer) : e.outer;
+    const holes = e.holes.map(h=>{ const hb=bbox([h]); return (Math.max(hb.w,hb.h)<=maxMM && roundness(h)>0.78) ? ellipseOf(h) : h; });
+    out.push({outer, holes}); }
+  try{ return flatEx(out); }catch(err){ return ink; }
+}
+// Parts of the cookie thinner than about 5 mm (a stem, a leaf stalk, a thin tail) would break off: make them thick enough to hold.
+function thickenThinParts(O){
+  const r=RULES.neck; const opened=offset(offset([O],-r,0.04),r,0.04);
+  // only strips that stay thin along their length (a stem, a stalk), not pointed tips such as ears or toes
+  let thin=diff([O], opened); thin=flatEx(exPolys(thin).filter(e=>{ const A=exArea(e); if(A<0.6) return false;
+    const P=plen(e.outer.concat([e.outer[0]])), len=P/2, meanW=A/Math.max(len,1e-6); return meanW<1.8 && len>3; }));
+  if(!thin.length) return O;
+  let grown=union([O].concat(offset(thin, r*0.9, 0.04))); grown=offset(offset(grown,0.8,0.04),-0.8,0.04);
+  const ex=exPolys(grown); if(!ex.length) return O; ex.sort((p,q)=>exArea(q)-exArea(p)); return ex[0].outer;
+}
 function subjectBox(im){
   const iw=im.naturalWidth, ih=im.naturalHeight, sc=Math.min(1,320/Math.max(iw,ih)), W=Math.max(1,Math.round(iw*sc)), H=Math.max(1,Math.round(ih*sc));
   try{ const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const g=cv.getContext("2d",{willReadFrequently:true}); g.drawImage(im,0,0,W,H);
