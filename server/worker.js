@@ -8,7 +8,6 @@
 //                reply: {"image": "data:image/png;base64,..."}   or   {"error": "..."}
 
 const MODEL = "gemini-3.1-flash-image";
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`;
 const MAX_BYTES = 6 * 1024 * 1024; // largest picture accepted (base64 included)
 
 const PROMPT = `Redraw this picture as a design for a cookie cutter.
@@ -67,19 +66,31 @@ export default {
     if (!m) return reply({ error: "send a PNG, JPEG or WebP picture" }, 400, h);
     if (m[3].length > MAX_BYTES) return reply({ error: "picture too large" }, 413, h);
 
-    const g = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: m[1], data: m[3] } }] }],
-        generationConfig: { responseModalities: ["IMAGE"], responseFormat: { image: { imageSize: "1K" } } },
-      }),
-    });
-    if (!g.ok) {
-      const t = await g.text();
-      console.log("gemini error", g.status, t.slice(0, 500));
-      return reply({ error: g.status === 429 ? "busy, try again in a minute" : "redraw failed" }, 502, h);
+    // Gemini's REST format has changed between versions; try the current one, then the older one.
+    const parts0 = [{ text: PROMPT }, { inline_data: { mime_type: m[1], data: m[3] } }];
+    const tries = [
+      { url: `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`,
+        gen: { responseModalities: ["IMAGE"], responseFormat: { image: { imageSize: "1K" } } } },
+      { url: `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+        gen: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { imageSize: "1K" } } },
+      { url: `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+        gen: { responseModalities: ["TEXT", "IMAGE"] } },
+    ];
+    let g = null, why = "";
+    for (const t of tries) {
+      g = await fetch(t.url, {
+        method: "POST",
+        headers: { "x-goog-api-key": env.GEMINI_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: parts0 }], generationConfig: t.gen }),
+      });
+      if (g.ok) break;
+      const txt = await g.text();
+      let msg = txt; try { msg = JSON.parse(txt).error.message || txt; } catch {}
+      why = `Gemini ${g.status}: ${String(msg).slice(0, 300)}`;
+      console.log(why);
+      if (g.status !== 400 && g.status !== 404) break;   // only a format problem is worth another try
     }
+    if (!g.ok) return reply({ error: g.status === 429 ? "busy, try again in a minute" : "redraw failed", detail: why }, 502, h);
     const out = await g.json();
     const parts = (out.candidates && out.candidates[0] && out.candidates[0].content && out.candidates[0].content.parts) || [];
     const imgs = parts.filter(p => (p.inline_data || p.inlineData) && !p.thought);
