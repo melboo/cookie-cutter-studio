@@ -10,25 +10,21 @@
 const MODEL = "gemini-3.1-flash-image";
 const MAX_BYTES = 6 * 1024 * 1024; // largest picture accepted (base64 included)
 
-const PROMPT = `Redraw this picture as the design for a 3D-printed cookie cutter that presses lines into the dough.
-The cookie has no colour, so the drawing must read from its black lines alone.
+const PROMPT = `Redraw this picture as a simple, bold, flat illustration of its main subject.
 
-Keep:
-- The main subject only, centred, filling about 85% of the image width or height.
-- Its real outline, simplified and smooth: one single closed black outline. Keep the bumps, tips and notches that make the shape recognisable.
-- Every detail that makes the subject recognisable, drawn as simple lines or small solid shapes: where parts meet or overlap, eyes, nose, mouth, openings, seeds, scales, plates, pleats, layers, a simple pattern if it is part of the thing (for example a waffle grid or shell plates). Usually 5 to 25 lines and marks.
-
-Remove:
-- Shading, gradients, highlights, reflections, shadows, texture noise and hatching.
-- Text, labels, arrows, leader lines, captions, logos, frames, sparkles, motion marks and background objects.
-- Any second outline, border, halo, white edge or sticker edge around the subject.
+Content:
+- Only the main subject, centred, filling about 85% of the image width or height.
+- No words, letters or numbers anywhere. Remove labels, arrows, pointer lines, captions, logos, frames, sparkles, motion marks, shadows and background objects.
+- Keep the subject's real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
+- Keep the details that make it recognisable, as simple shapes: lines where parts meet or overlap, eyes, nose, mouth, openings, seeds, plates, layers, or a simple pattern that belongs to it. Usually 5 to 20 of them. Small details become small solid dots.
 
 Style:
-- All lines black and the same even weight, outline included, like a clean colouring-book line drawing.
-- Leave clear space between lines: two lines never run closer than about twice the line width.
-- Inside the outline, flat light colours are fine; the background is plain off-white (#F7F1E3).
+- Thick black lines of one even weight, about 2% of the image width, for the outline and every inner line.
+- The outline is one single line. Never draw a second line parallel to it, a border, a halo, a white edge or a sticker edge.
+- Fill each area with one flat colour. No shading, gradients, highlights, reflections or texture.
+- Leave clear space between lines; two lines never run close and parallel.
 - If the picture shows human anatomy, draw it as a neutral, schematic biology-textbook illustration.
-- Output an image only.`;
+- Plain off-white background (#F7F1E3). Output an image only.`;
 
 function cors(origin, allowed) {
   const ok = allowed.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || "");
