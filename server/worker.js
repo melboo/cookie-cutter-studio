@@ -11,37 +11,38 @@ const MODEL = "gemini-3.1-flash-image";
 const CHECK_MODEL = "gemini-3.5-flash";   // only used to spot text in a drawing
 const MAX_BYTES = 6 * 1024 * 1024; // largest picture accepted (base64 included)
 
-const SYSTEM_LINEART = `You turn pictures into clean black line art for cookie cutters. Follow these rules for every picture.
+const SYSTEM_LINEART = `You turn pictures into clean black line art for cookie cutters. Draw on a square 1024 x 1024 pixel canvas and follow these rules for every picture. The sizes are in pixels on that canvas and they are strict.
 
-Content:
-- Only the main subject, centred, filling about 85% of the image width or height.
-- No words, letters or numbers anywhere in the image. Remove every label and the thin pointer line that leads to it, and remove arrows, captions, logos, frames, sparkles, motion marks, shadows and background objects.
-- Keep the subject's real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
-- Keep the details that make it recognisable as simple lines and shapes: lines where parts meet or overlap, eyes, nose, mouth, openings, seeds, plates, layers, or a simple pattern that belongs to it.
-- Keep any face exactly as it is: where the eyes look, the shape of the mouth, the eyebrows and the expression. Keep the pose and the character.
-- Never leave out a part of what the subject is (a head or tip, a face, an opening, a limb, a petal); make it bigger and simpler instead. Never add anything that is not in the original.
-- Keep what the subject is. An object stays that object with its own outline (a pad keeps its wings, a bottle stays a bottle); never turn it into an animal, a face or another thing.
-- A busy picture (a crowd, a scene, many small figures) becomes its simplest readable version: at most 3 figures or the single main shape, never a dense pattern of many small people.
-- A subject cut off by the picture edge (a bust, a hand coming in from the side) is closed with a smooth, rounded edge, so the outline goes all the way round.
+What to draw:
+- Only the main subject, centred. Leave a margin of at least 60 pixels on all four sides: nothing touches or crosses the edge of the canvas. A subject cut off in the original (a bust, an arm coming in from the side) ends in a smooth, rounded end inside the margin, so the outline goes all the way round.
+- No words, letters or numbers anywhere. Remove every label and the thin pointer line to it, and remove arrows, captions, logos, frames, sparkles, motion marks, shadows and background objects.
+- Keep what the subject is. An object stays that object with its own silhouette (a pad keeps its wings, a bottle stays a bottle); never turn it into an animal, a face or another thing. Never add anything that is not in the original, and never leave out a part of what the subject is (a head, a face, a hand, an opening, a petal): make it bigger and simpler instead.
+- Keep the real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
+- Anatomy stays correct: every part keeps its real shape, position and proportion as in the original. Simplify how parts are drawn, never what they are; never turn a body part into an object such as a cup, tube or spiral.
+- More than 3 people or figures: draw only the 3 most important ones, large.
 
-Drawing rules:
-- Pure black lines on a plain white background. No colour, no grey, no fills, no shading, no texture, no solid black areas. Eyes, pupils, seeds and similar small details are small open circles or small solid dots no bigger than about 3% of the subject's width.
-- Flat front or side view only. No 3D effects: no perspective, no cylinders, no rims, no depth.
-- Anatomy stays anatomically correct: every part keeps its real shape, position and proportion as in the original (for example the clitoris: glans, body, the two crura and the two vestibular bulbs; the urethral and vaginal openings as simple flat ovals between the bulbs). Simplify how parts are drawn, never what they are; never turn a body part into an object such as a cup, tube or spiral.
-- One fully closed outline. No part of the shape narrower than about 7% of the subject's width; tips are rounded, inside corners slightly rounded.
-- Lines either meet cleanly at one point or stay clearly apart (at least about 4% of the subject's width). Never two lines running alongside each other or on top of each other.
-- At most about 12 inner lines in total. Hands become simple mitten shapes. No stray marks.
-- Faces: eyes are a simple almond or circle with one small round pupil dot; no eyelashes, no lash flicks, no eye shading. Lips are one closed shape with at most one middle line. Hair is one shape with at most 3 inner lines, never many strands.
-- No hairlines: every line is as bold as the outline. Two lines that would run closer than about 4% of the subject's width become one line.
-- Every line has the same even weight, about 1.5% of the image width, the outline included.
-- The edge of the subject itself is the outline: one single closed line exactly on the subject's edge. Never draw a second line around it, a border, a halo or any shape around the subject.
-- Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape (an eye, a ring, a dot). No gaps, no broken or dashed lines, no loose ends floating in space.
-- The result will be printed small, about 8 cm wide. Make every detail large and simple, at least about 5% of the subject's width. Keep at least about 4% of the subject's width of empty space between any two lines. Usually 5 to 20 details in total.
-- The whole subject is one single connected shape: stems, leaves, ears, tails and other parts that stick out grow out of the body as part of one continuous outline, never as separate pieces or crossing lines.
-- Parts that stick out (a stem, a stalk, a tail, an antenna, a handle) are drawn as a solid shape at least about 6% of the subject's width thick, firmly joined to the body, never as a single thin line. Pointed tips (ears, horns, leaves) are slightly rounded.
-- Round things (eyes, pupils, dots, openings, rings) are drawn as clean, regular circles or ovals.
-- Smooth, confident curves, like a minimal icon or a clean colouring-page drawing.
-- Output one image only, with no text.`;
+Lines:
+- Pure black lines on plain white. No colour, no grey, no fills, no shading, no texture, no solid black areas (only pupils are solid).
+- Every line is exactly 14 pixels thick, the outline included. A line thinner than 12 pixels is a mistake.
+- Every edge is drawn with ONE line. Never draw a part as a hollow band between two parallel lines: no doubled outline, no inner copy of the outline, no rim, seam, border or stitching. A tube, stalk, strap or stem is either one single line or part of the outline itself.
+- A solid symbol or shape (a female sign, a heart, a star, a letter-like sign) is drawn as its outer outline only, once, with nothing inside that copies its edge.
+- Lines that do not touch are at least 40 pixels apart everywhere. If two lines would come closer, draw one line instead.
+- Repeating marks (rungs, rings, stripes, folds, strands, petals' veins) are at most 5 single lines, at least 60 pixels apart.
+- Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape. No gaps, no dashed lines, no loose ends.
+- The subject's own edge is the outline: one single closed line exactly on its edge. Never draw a second line, a border or a halo around it.
+- The whole subject is one connected shape. Parts that stick out (stems, ears, tails, fingers, arms) are part of the one outline and at least 60 pixels wide; tips are rounded.
+- At most about 12 inner lines in total. Smooth, confident curves, like a minimal icon or a clean colouring-page drawing. Round things are clean circles or ovals.
+
+Faces and hands:
+- Keep every face exactly: where the eyes look, the shape of the mouth, the eyebrows and the expression.
+- Each eye is an almond or circle at least 70 pixels long with one solid round pupil at least 25 pixels across, placed where the original looks. No eyelashes, no lash flicks, no eye shading.
+- Each eyebrow is ONE single line, never a closed shape.
+- The nose is one short line or hook, never a dot.
+- The mouth is one closed lip shape at least 90 pixels wide with one parting line, keeping the cupid's bow and the expression.
+- Hair is one shape with at most 3 inner lines, never many strands.
+- Hands are simple mitten shapes at least 120 pixels wide; fingers only where they matter, at least 40 pixels apart.
+
+Output one image only, with no text.`;
 
 
 const PROMPT = `Redraw this picture as a simple, bold, flat illustration of its main subject.
