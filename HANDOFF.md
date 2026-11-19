@@ -93,7 +93,10 @@ The drawing must follow the owner's rules:
   - Closed shapes with an inside under ~1.5 mm (hollow brows, doubled lids) close up and become one line. Lips stay parted.
   - Convex outline tips get at least a 0.6 mm radius (pad ear tips were needle-sharp).
 - Still open from round 11: ovary arcs at joins; lines 0.1–2.4 mm from the wall or another line (stylish mouth, heart rim, pad channels); nostril hooks still become 2 mm dots; lotus centre knot; hearts hair outline jagged. Several of these are also drawing-side: the new worker rules should reduce them.
-- Waiting for review round 12.
+- Review round 12: venus still the only pass; the reviewer noted gaps must be judged on the built cutter, not on the drawing. Fixed after it:
+  - `clRefine()`: a second pass on the cutter as built (ridges at 0.9 mm plus the wall band). Every dough gap narrower than ~1.5 mm, between ridges or a ridge and the wall, is closed and the centre lines are taken again, so it becomes one line. The second pass keeps the first pass's dots and never makes new ones.
+  - The wall's inner (cookie-side) face is rounded by 0.6 mm too, so tips like the pad's ears aren't needle-sharp on the dough side.
+- 19 Nov: the owner deployed the new `server/worker.js` (17 Nov rules). Next: rerun all 10 through the live worker (needs a browser on melboo.github.io for CORS), then review round 13.
 
 ## Status at review round 7b
 

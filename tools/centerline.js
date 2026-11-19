@@ -114,10 +114,10 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   for(const c of clComps(ink,W,H)){ let x0=W,x1=0,y0=H,y1=0,cx=0,cy=0; for(const i of c){ const x=i%W,y=(i/W)|0; cx+=x; cy+=y; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
     cx/=c.length; cy/=c.length; const ar=Math.sqrt(c.length/Math.PI); if(Math.max(x1-x0,y1-y0)>7*ppm) continue;
     let rmax=0; for(const i of c) rmax=Math.max(rmax,Math.hypot(i%W-cx,((i/W)|0)-cy));
-    if(rmax<=ar*1.5 && ar>=0.6*ppm){ dots.push({cx,cy,r:ar}); for(const i of c) work[i]=0; } }
+    if(!opt.noDots && rmax<=ar*1.5 && ar>=0.6*ppm){ dots.push({cx,cy,r:ar}); for(const i of c) work[i]=0; } }
   // 1b. pupils and other solid dots that touch a line (an eye's lid): thick, compact cores of the ink
   let sk0=clThin(work,W,H);
-  { const hs=[]; for(let i=0;i<W*H;i++) if(sk0[i]) hs.push(dInk[i]); hs.sort((a,b)=>a-b);
+  if(!opt.noDots){ const hs=[]; for(let i=0;i<W*H;i++) if(sk0[i]) hs.push(dInk[i]); hs.sort((a,b)=>a-b);
     const hwLine=hs.length?hs[hs.length>>1]:0.5*ppm, t=Math.max(2.0*hwLine, 0.75*ppm);
     const core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=(work[i]&&dInk[i]>t)?1:0;
     for(const c of clComps(core,W,H)){ if(c.length<1) continue;   // a junction's core is a speck; a pupil's is a disc
@@ -159,7 +159,7 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   for(const e of G.edges){ const L=clLen(e.p);
     if(!e.closed && d2[e.a]===1 && d2[e.b]===1 && L<2.5*ppm){ let cx=0,cy=0; for(const p of e.p){ cx+=p[0]; cy+=p[1]; } cx/=e.p.length; cy/=e.p.length;
       let near=0; for(const p of e.p){ const i=Math.round(p[1])*W+Math.round(p[0]); near=Math.max(near,ink[i]?1:0); }
-      if(near && L>=0.4*ppm) dots.push({cx,cy,r:Math.max(1.0*ppm,L/2)}); continue; }
+      if(near && L>=0.4*ppm && !opt.noDots) dots.push({cx,cy,r:Math.max(1.0*ppm,L/2)}); continue; }
     if(e.closed && L<3*ppm) continue;
     const sm=clSmooth(e.p,ppm,!!e.closed,0.6); if(!e.closed){ sm.wa=!opt.merge&&!!atWall[e.a]; sm.wb=!opt.merge&&!!atWall[e.b]; } lines.push(sm); }
   // 6. wall: stretches that run ALONG the wall within ~3.5 mm go onto it (no sliver of dough between); lines that head into the
@@ -191,3 +191,18 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   // dots: small ones solid (at least 2 mm across), big ones rings
   for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,d.keep?0.8*ppm:1.0*ppm),2.0*ppm); }
   return {lines,dots,hwOut}; }
+
+// second pass, on the cutter as built: draw the ridges (0.9 mm) and the wall band, close every gap of dough narrower than
+// ~1.5 mm (between two ridges, or a ridge and the wall), and take the centre lines again, so such a gap becomes one line
+function clRefine(res,sil,W,H,ppm,dIn,opt){
+  const M=new Uint8Array(W*H), B=(opt.wall||1.4)*ppm;
+  for(let i=0;i<W*H;i++) if(sil[i]&&dIn[i]<=B) M[i]=1;
+  for(const l of res.lines) clDisk(M,W,H,l.c?l.p.concat([l.p[0]]):l.p,0.45*ppm);
+  for(const d of res.dots){ if(d.ring) clDisk(M,W,H,(()=>{ const C=[]; for(let k=0;k<=64;k++){ const a=2*Math.PI*k/64; C.push([d.cx+(d.r-0.45*ppm)*Math.cos(a), d.cy+(d.r-0.45*ppm)*Math.sin(a)]); } return C; })(),0.45*ppm); else clDisk(M,W,H,[[d.cx,d.cy]],d.r); }
+  const cream=new Uint8Array(W*H); for(let i=0;i<W*H;i++) cream[i]=(sil[i]&&!M[i])?1:0;
+  const dc=clDist(cream,W,H); let closed=0;
+  for(const c of clComps(cream,W,H)){ let mx=0; for(const i of c) if(dc[i]>mx) mx=dc[i]; if(mx<0.75*ppm){ for(const i of c) M[i]=1; closed++; } }
+  if(!closed) return res;
+  const ink=new Uint8Array(W*H); for(let i=0;i<W*H;i++) ink[i]=(M[i]&&sil[i])?1:0;
+  const r2=clRidges(ink,W,H,ppm,dIn,clDist(ink,W,H),Object.assign({},opt,{noDots:true}));
+  r2.dots=res.dots; r2.closedGaps=closed; return r2; }

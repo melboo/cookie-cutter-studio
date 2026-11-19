@@ -102,14 +102,14 @@ function run(name){
   let fat=ink; const want=0.4*ppm; if(half<want){ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=ink[i]?0:1; const dn=dist(inv,W,H); fat=new Uint8Array(W*H); for(let i=0;i<W*H;i++) fat[i]=(ink[i]||dn[i]<=want-half)?1:0; }
   const all=new Uint8Array(W*H); for(let i=0;i<W*H;i++) all[i]=(fat[i]&&sil[i])?1:0;
   const silP=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length)[0]; const O=clSmooth(silP,ppm,true,1.2,0.35).p;
-  const res=clRidges(all,W,H,ppm,dist(sil,W,H),dist(all,W,H),{outline:O});
+  const dS=dist(sil,W,H); let res=clRidges(all,W,H,ppm,dS,dist(all,W,H),{outline:O}); res=clRefine(res,sil,W,H,ppm,dS,{outline:O}); if(res.closedGaps) notes.push('closed '+res.closedGaps+' narrow gaps');
   const mm=P=>P.map(p=>[p[0]/ppm,p[1]/ppm]); let Omm=mm(O);
   // no needle-sharp outline points: convex tips get at least a 0.6 mm radius
   { const r=offset(offset([Omm],-0.6,0.01),0.6,0.01); let best=null,ba=0; for(const p of r){ const a=Math.abs(p.reduce((s,q,i)=>{ const t=p[(i+1)%p.length]; return s+q[0]*t[1]-t[0]*q[1]; },0)); if(a>ba){ ba=a; best=p; } } if(best) Omm=best; }
   { let L=0; for(const l of res.lines) L+=clLen(l.p)/ppm; const A=Math.abs(Omm.reduce((a,p,i)=>{ const q=Omm[(i+1)%Omm.length]; return a+p[0]*q[1]-q[0]*p[1]; },0))/2; const dens=L/A; notes.push('density '+dens.toFixed(3)+' pieces/1000mm2 '+(1000*(res.lines.length+res.dots.length)/A).toFixed(1)); }
   let ridges=strokeLines(res.lines.map(l=>({p:mm(l.p),c:l.c})),0.9);
   for(const d of res.dots){ const cx=d.cx/ppm, cy=d.cy/ppm, r=d.r/ppm; ridges=ridges.concat(d.ring? strokeLines([{p:circ(cx,cy,r-0.45),c:true}],0.9) : [circ(cx,cy,r)]); }
-  const band=diff([Omm],offset([Omm],-1.4));
+  const band=diff([Omm],offset(offset(offset([Omm],-1.4),-0.6,0.01),0.6,0.01));
   const plastic=inter(union(ridges.concat(band)),[Omm]);
   { const sa=p=>p.reduce((a,q,i)=>{ const r=p[(i+1)%p.length]; return a+q[0]*r[1]-r[0]*q[1]; },0)/2; let big=plastic[0], ba=0; for(const p of plastic){ if(Math.abs(sa(p))>ba){ ba=Math.abs(sa(p)); big=p; } }
     const sg=Math.sign(sa(big)); let cells=0; for(const p of plastic){ const a=sa(p); if(Math.sign(a)!==sg && Math.abs(a)<6.25) cells++; } notes.push('small cells '+cells); }
