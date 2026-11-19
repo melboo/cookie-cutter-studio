@@ -96,7 +96,7 @@ The drawing must follow the owner's rules:
 - Review round 12: venus still the only pass; the reviewer noted gaps must be judged on the built cutter, not on the drawing. Fixed after it:
   - `clRefine()`: a second pass on the cutter as built (ridges at 0.9 mm plus the wall band). Every dough gap narrower than ~1.5 mm, between ridges or a ridge and the wall, is closed and the centre lines are taken again, so it becomes one line. The second pass keeps the first pass's dots and never makes new ones.
   - The wall's inner (cookie-side) face is rounded by 0.6 mm too, so tips like the pad's ears aren't needle-sharp on the dough side.
-- 19 Nov: the owner deployed the new `server/worker.js` (17 Nov rules). Next: rerun all 10 through the live worker (needs a browser on melboo.github.io for CORS), then review round 13.
+- 19 Nov: the owner deployed the new `server/worker.js` (17 Nov rules). Rerun through the live worker on 19 Nov: the pad is a pad again (no cat), the crowded heart is simpler, duo's outline is closed. Side effects: Gemini now draws thinner lines, the uterus canal got ~10 rungs only ~1 mm apart, and venus became a hollow (double-line) symbol. Conversion fix after this run: a wall-pull stretch must keep a steady distance from the wall (range under 1.2 mm), so arcs like the ovaries are no longer pulled into it. Review round 13 runs on the new drawings (`/tmp/gz/png13` in the session).
 
 ## Status at review round 7b
 

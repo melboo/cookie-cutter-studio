@@ -11953,7 +11953,9 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
         tgt[i]=[nx+ux*T, ny+uy*T]; }
       // only stretches of at least 3 mm along the wall are pulled (short ones would only make bumps)
       for(let i=0;i<n;){ if(!tgt[i]){ i++; continue; } let j=i, L=0; while(j+1<n&&tgt[j+1]){ L+=Math.hypot(P[j+1][0]-P[j][0],P[j+1][1]-P[j][1]); j++; }
-        if(L<3*ppm) for(let k=i;k<=j;k++) tgt[k]=null; i=j+1; }
+        // a stretch that really runs along the wall keeps a steady distance from it; an arc (an ovary, a petal) that curves away does not
+        let dmin=1e9,dmax=0; for(let k=i;k<=j;k++){ const dd=near(P[k][0],P[k][1])[2]; if(dd<dmin) dmin=dd; if(dd>dmax) dmax=dd; }
+        if(L<3*ppm || dmax-dmin>1.2*ppm) for(let k=i;k<=j;k++) tgt[k]=null; i=j+1; }
       l.p=P.map((p,i)=>{ if(tgt[i]){ moved=true; return tgt[i]; } return p; });
       for(const [end,ext] of (l.ext||[])){ if(end===0) l.p=ext.reverse().concat(l.p); else l.p=l.p.concat(ext); }
       delete l.ext;
