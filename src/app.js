@@ -1671,13 +1671,13 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
       let cx=0,cy=0,x0=W,x1=0,y0=H,y1=0; for(const i of c){ const x=i%W,y=(i/W)|0; cx+=x; cy+=y; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
       cx/=c.length; cy/=c.length; if(Math.max(x1-x0,y1-y0)>3*ppm) continue;
       let rmax=0; for(const i of c) rmax=Math.max(rmax,Math.hypot(i%W-cx,((i/W)|0)-cy)); if(rmax>Math.sqrt(c.length/Math.PI)*1.35+1) continue;   // round only
-      let dmax=0; for(const i of c) dmax=Math.max(dmax,dInk[i]); const r=Math.max(dmax,1.0*ppm);
+      let dmax=0; for(const i of c) dmax=Math.max(dmax,dInk[i]); const r=Math.max(dmax,0.8*ppm);
       if(dIn[Math.round(cy)*W+Math.round(cx)] < r+1.6*ppm) continue;                                              // never on the wall
       dots.push({cx,cy,r,keep:true}); } }
   // 1c. narrow pockets and slits inside the drawing (lips, brows, lash roots: under ~2 mm across) close up, so they become one line
   { const bg=new Uint8Array(W*H); for(let i=0;i<W*H;i++) bg[i]=(!work[i]&&dIn[i]>0)?1:0;
     const dBg=(()=>{ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=bg[i]?1:0; return clDist(inv,W,H); })();
-    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<1.0*ppm) for(const i of c) work[i]=1; } }
+    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<0.35*ppm) for(const i of c) work[i]=1; } }
   dInk=clDist(work,W,H);
   // 2. centre lines of everything else
   sk0=clThin(work,W,H);
@@ -1689,6 +1689,14 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   const atWall=new Uint8Array(G.nodes.length);
   G.edges=G.edges.filter(e=>{ let k=0; for(const p of e.p){ if(dIn[Math.round(p[1])*W+Math.round(p[0])]<=band) k++; }
     if(k>=0.6*e.p.length){ if(!e.closed){ atWall[e.a]=1; atWall[e.b]=1; } return false; } return true; });
+  // a line that forks just before the wall (two short branches both reaching it) keeps only the branch that goes straight on
+  { const d=clDeg(G); const dir=(e,nid)=>{ const P=e.a===nid?e.p:e.p.slice().reverse(); const k=Math.min(P.length-1,8); return [P[k][0]-P[0][0],P[k][1]-P[0][1]]; };
+    for(let nid=0;nid<G.nodes.length;nid++){ if(d[nid]<3) continue; const es=G.edges.filter(e=>!e.closed&&(e.a===nid||e.b===nid)); if(es.length<3) continue;
+      const toWall=es.filter(e=>{ const o=e.a===nid?e.b:e.a; return atWall[o] && clLen(e.p)<3*ppm; }); if(toWall.length<2) continue;
+      const main=es.filter(e=>!toWall.includes(e)).sort((a,b)=>clLen(b.p)-clLen(a.p))[0]; if(!main) continue;
+      const m=dir(main,nid), ml=Math.hypot(m[0],m[1])||1; let best=null, bc=2;
+      for(const e of toWall){ const v=dir(e,nid), c=(m[0]*v[0]+m[1]*v[1])/(ml*(Math.hypot(v[0],v[1])||1)); if(c<bc){ bc=c; best=e; } }   // most opposite to the incoming line = straight on
+      G.edges=G.edges.filter(e=>!(toWall.includes(e)&&e!==best)); } }
   clMerge(G,atWall);
   // 4. (optional) lines closer than 2*merge (centre to centre) are merged into one; off by default, it invents knots in faces
   if(opt.merge){ const fat=new Uint8Array(W*H); for(const e of G.edges) clDisk(fat,W,H,e.closed?e.p.concat([e.p[0]]):e.p,merge);
@@ -1705,21 +1713,30 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   //    wall keep their own direction, and ends that met the drawn outline run straight on into it; closed shapes stay whole
   if(opt.outline){ const O=opt.outline, near=(x,y)=>{ let bd=1e18,bx=0,by=0; for(let i=0;i<O.length;i++){ const a=O[i], b=O[(i+1)%O.length]; const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9; let t=((x-a[0])*dx+(y-a[1])*dy)/L2; t=t<0?0:t>1?1:t; const px=a[0]+dx*t, py=a[1]+dy*t, d=(px-x)**2+(py-y)**2; if(d<bd){ bd=d; bx=px; by=py; } } return [bx,by,Math.sqrt(bd)]; };
     const D=3.5*ppm, T=0.8*ppm;
-    for(const l of lines){ if(l.c) continue; const P=l.p, n=P.length; let moved=false;
-      const Q=P.map((p,i)=>{ const [nx,ny,d]=near(p[0],p[1]); if(d>=D||d<1e-6) return p;
-        const a=P[Math.max(0,i-3)], b=P[Math.min(n-1,i+3)], tx=b[0]-a[0], ty=b[1]-a[1], tl=Math.hypot(tx,ty)||1, ux=(p[0]-nx)/d, uy=(p[1]-ny)/d;
-        if(Math.abs((tx*ux+ty*uy)/tl)>0.57) return p;   // heading into the wall, not along it
-        moved=true; return [nx+ux*T, ny+uy*T]; });
-      l.p=Q;
-      for(const [end,flag] of [[0,l.wa],[n-1,l.wb]]){ const p=l.p[end], [,,d]=near(p[0],p[1]); if(!(flag||d<D)||d<=T) continue;
+    for(const l of lines){ if(l.c) continue; let moved=false, n=l.p.length;
+      const keepA=new Uint8Array(n);   // points near an end that runs into the wall: not pulled sideways
+      for(const [end,flag] of [[0,l.wa],[n-1,l.wb]]){ if(!flag) continue; const p=l.p[end], [,,d]=near(p[0],p[1]);
+        let acc=0; for(let k=0;k<n;k++){ const i=end===0?k:n-1-k; if(k) acc+=Math.hypot(l.p[i][0]-l.p[end===0?i-1:i+1][0], l.p[i][1]-l.p[end===0?i-1:i+1][1]); if(acc>5*ppm) break; keepA[i]=1; }
+        if(d<=T||d>2.2*ppm) continue;
         const q=l.p[end===0?Math.min(n-1,4):Math.max(0,n-5)]; let dx=p[0]-q[0], dy=p[1]-q[1]; const dl=Math.hypot(dx,dy)||1; dx/=dl; dy/=dl;
-        const ext=[]; let x=p[0], y=p[1]; for(let k=0;k<40;k++){ x+=dx*0.25*ppm; y+=dy*0.25*ppm; ext.push([x,y]); if(near(x,y)[2]<=T) break; }
-        if(near(x,y)[2]<=T*1.5){ if(end===0) l.p=ext.reverse().concat(l.p); else l.p=l.p.concat(ext); moved=true; } }
+        const ext=[]; let x=p[0], y=p[1]; for(let k=0;k<12;k++){ x+=dx*0.25*ppm; y+=dy*0.25*ppm; ext.push([x,y]); if(near(x,y)[2]<=T) break; }
+        if(near(x,y)[2]<=T*1.5){ l.ext=l.ext||[]; l.ext.push([end,ext]); } }
+      const P=l.p, tgt=new Array(n).fill(null);
+      for(let i=0;i<n;i++){ if(keepA[i]) continue; const p=P[i], [nx,ny,d]=near(p[0],p[1]); if(d>=D||d<1e-6) continue;
+        const a=P[Math.max(0,i-3)], b=P[Math.min(n-1,i+3)], tx=b[0]-a[0], ty=b[1]-a[1], tl=Math.hypot(tx,ty)||1, ux=(p[0]-nx)/d, uy=(p[1]-ny)/d;
+        if(Math.abs((tx*ux+ty*uy)/tl)>0.57) continue;   // heading into the wall, not along it
+        tgt[i]=[nx+ux*T, ny+uy*T]; }
+      // only stretches of at least 3 mm along the wall are pulled (short ones would only make bumps)
+      for(let i=0;i<n;){ if(!tgt[i]){ i++; continue; } let j=i, L=0; while(j+1<n&&tgt[j+1]){ L+=Math.hypot(P[j+1][0]-P[j][0],P[j+1][1]-P[j][1]); j++; }
+        if(L<3*ppm) for(let k=i;k<=j;k++) tgt[k]=null; i=j+1; }
+      l.p=P.map((p,i)=>{ if(tgt[i]){ moved=true; return tgt[i]; } return p; });
+      for(const [end,ext] of (l.ext||[])){ if(end===0) l.p=ext.reverse().concat(l.p); else l.p=l.p.concat(ext); }
+      delete l.ext;
       if(moved){ const sm=clSmooth(l.p,ppm,false,0.5); l.p=sm.p; } } }
   // nubs: open lines shorter than 1 mm that hang off nothing
   for(let i=lines.length-1;i>=0;i--){ const l=lines[i]; if(!l.c && clLen(l.p)<1.0*ppm) lines.splice(i,1); }
   // dots: small ones solid (at least 2 mm across), big ones rings
-  for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,1.0*ppm),2.0*ppm); }
+  for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,d.keep?0.8*ppm:1.0*ppm),2.0*ppm); }
   return {lines,dots,hwOut}; }
 
 function vectorDesign(img, sizeMM){
@@ -1746,10 +1763,15 @@ function vectorDesign(img, sizeMM){
   const silOf=r=>{ const s=close(ink,Math.round(r)), out=flood(inv(s)); const m=new Uint8Array(N); let a=0; for(let i=0;i<N;i++){ m[i]=out[i]?0:1; a+=m[i]; } return {m,a}; };
   const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s2=silOf(ppm*mm); if(s2.a>=0.9*ref.a){ pick=s2; break; } }
   let sil=(pick||ref).m; { const cs=comps(sil); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(N); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
-  // strokes poking out of the cookie (lash tips through the outline): bits beyond a 1.5 mm opening that are nearly all ink
-  { const r=1.5*ppm, dI=dist(sil), core=new Uint8Array(N); for(let i=0;i<N;i++) core[i]=dI[i]>r?0:1; const dc=dist(core);
+  // notches (between fingers, petals): closing the outline's gaps also fills them. A small filled area that is really outside
+  // (reachable from outside without closing) is a notch, not a leak: give it back
+  { const raw=flood(inv(ink)); let A=0; for(let i=0;i<N;i++) A+=sil[i];
+    const nm=new Uint8Array(N); for(let i=0;i<N;i++) nm[i]=(raw[i]&&sil[i])?1:0;
+    for(const c of comps(nm)) if(c.length<0.03*A) for(const i of c) sil[i]=0; }
+  // strokes poking out of the cookie (lash tips through the outline): parts narrower than ~2 mm that are mostly ink
+  { const r=1.0*ppm, dI=dist(sil), core=new Uint8Array(N); for(let i=0;i<N;i++) core[i]=dI[i]>r?0:1; const dc=dist(core);
     const pro=new Uint8Array(N); for(let i=0;i<N;i++) pro[i]=(sil[i]&&dc[i]>r+0.5)?1:0;
-    for(const c of comps(pro)){ let k=0; for(const i of c) if(ink[i]) k++; if(k>=0.85*c.length) for(const i of c) sil[i]=0; }
+    for(const c of comps(pro)){ let k=0; for(const i of c) if(ink[i]) k++; if(c.length>4 && k>=0.7*c.length) for(const i of c) sil[i]=0; }
     const cs=comps(sil); cs.sort((a,b)=>b.length-a.length); const keep=new Uint8Array(N); if(cs[0]) for(const i of cs[0]) keep[i]=1; sil=keep; }
   // the cookie itself decides the size (lines left outside an open outline don't count)
   x0=W; x1=0; y0=H; y1=0; for(let i=0;i<N;i++) if(sil[i]){ const x=i%W,y=(i/W)|0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }

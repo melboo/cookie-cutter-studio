@@ -80,10 +80,15 @@ function run(name){
     const outside=flood(white,W,H); const m=new Uint8Array(W*H); let a=0; for(let i=0;i<W*H;i++){ m[i]=outside[i]?0:1; a+=m[i]; } return {m,a}; };
   const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s=silOf(ppm*mm); if(s.a>=0.9*ref.a){ pick=s; break; } } if(!pick){ pick=ref; notes.push('outline not closed'); }
   let sil=pick.m; { const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
-  { // strokes poking out of the cookie (lash tips through the outline): bits beyond a 1.5 mm opening that are nearly all ink
-    const r=1.5*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
+  { // notches (between fingers, petals): closing the outline's gaps also fills them. A small filled area that is really
+    // outside (reachable from outside without closing) is a notch, not a leak: give it back
+    const wh=new Uint8Array(W*H); for(let i=0;i<W*H;i++) wh[i]=ink[i]?0:1; const raw=flood(wh,W,H); let A=0; for(let i=0;i<W*H;i++) A+=sil[i];
+    const nm=new Uint8Array(W*H); for(let i=0;i<W*H;i++) nm[i]=(raw[i]&&sil[i])?1:0;
+    for(const c of components(nm,W,H)) if(c.length<0.03*A) for(const i of c) sil[i]=0;
+    // strokes poking out of the cookie (lash tips through the outline): parts narrower than ~2 mm that are mostly ink
+    const r=1.0*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
     const pro=new Uint8Array(W*H); for(let i=0;i<W*H;i++) pro[i]=(sil[i]&&dc[i]>r+0.5)?1:0;
-    for(const c of components(pro,W,H)){ let k=0; for(const i of c) if(ink[i]) k++; if(k>=0.85*c.length) for(const i of c) sil[i]=0; }
+    for(const c of components(pro,W,H)){ let k=0; for(const i of c) if(ink[i]) k++; if(c.length>4 && k>=0.7*c.length) for(const i of c) sil[i]=0; }
     const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); const keep=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) keep[i]=1; sil=keep; }
   // the cookie decides the size: rescale so the cookie itself is 80 mm
   { let a0=W,a1=0,b0=H,b1=0; for(let i=0;i<W*H;i++) if(sil[i]){ const x=i%W,y=(i/W)|0; if(x<a0)a0=x; if(x>a1)a1=x; if(y<b0)b0=y; if(y>b1)b1=y; } ppm=Math.max(a1-a0,b1-b0)/80; }

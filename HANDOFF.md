@@ -82,7 +82,14 @@ The drawing must follow the owner's rules:
   - Outline smoothing moves no point more than 0.35 mm (finger notches stay); strokes poking out of the cookie (lash tips) are removed when a protrusion is at least 85% ink.
   - Size comes from the cookie itself, not from all ink (duo was 60 mm instead of 80).
   - `tooBusy` is now separate lines + dots per 1000 mm² over 28 (heart 37, others 19 or less). A cookie whose dough splits into pieces inside the wall counts as `thinPart`. Both show a short message in the bar after the one automatic redraw.
-- Waiting for review round 10.
+- Review round 10: venus still the only pass. Fixed after it:
+  - Pocket filling only for real slits (under ~0.7 mm); at 2 mm it collapsed whole lips (stylish became an "O").
+  - Dot minimum 1.6 mm across (nostrils were 2 mm balls).
+  - Wall: ends that met the drawn outline run straight on into it (only if within 2.2 mm), and nothing within 5 mm of such an end is pulled sideways; the along-wall pull only moves stretches at least 3 mm long. This removed the zig-zag "feet" and doubled stubs.
+  - A line that forks into two short branches at the wall keeps the straight one.
+  - Notches: small areas filled by the outline's gap-closing that are really outside (reachable from outside without closing) are given back.
+  - Lash spikes: protrusions narrower than ~2 mm that are at least 70% ink leave the cookie.
+- Waiting for review round 11.
 
 ## Status at review round 7b
 
