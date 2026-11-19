@@ -11902,7 +11902,7 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   // 1c. narrow pockets and slits inside the drawing (lips, brows, lash roots: under ~2 mm across) close up, so they become one line
   { const bg=new Uint8Array(W*H); for(let i=0;i<W*H;i++) bg[i]=(!work[i]&&dIn[i]>0)?1:0;
     const dBg=(()=>{ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=bg[i]?1:0; return clDist(inv,W,H); })();
-    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<0.35*ppm) for(const i of c) work[i]=1; } }
+    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<0.75*ppm) for(const i of c) work[i]=1; } }
   dInk=clDist(work,W,H);
   // 2. centre lines of everything else
   sk0=clThin(work,W,H);
@@ -12023,7 +12023,9 @@ function vectorDesign(img, sizeMM){
   // inner lines: centre lines drawn again at one even width (see clRidges)
   const res=clRidges(all, W, H, ppm, dist(sil), dist(all), {outline:Opx});
   const cx=(x0+x1)/2, cy=(y0+y1)/2, toMM=p=>p.map(q=>[(q[0]-cx)/ppm, (q[1]-cy)/ppm]);
-  const outline=toMM(Opx); if(Math.abs(area(outline))<1) return null;
+  let outline=toMM(Opx); if(Math.abs(area(outline))<1) return null;
+  // no needle-sharp outline points: convex tips get at least a 0.6 mm radius
+  { const r=largest(offset(offset([outline],-0.6,0.01),0.6,0.01)); if(r && Math.abs(area(r))>0.8*Math.abs(area(outline))) outline=r; }
   // too many separate lines and dots for the cookie's size (a crowd, a busy scene): ask for a simpler drawing
   const tooBusy = 1000*(res.lines.length+res.dots.length)/Math.abs(area(outline)) > 28;
   const circ=(x,y,r)=>{ const C=[], m=Math.max(48,Math.round(r*20)); for(let i=0;i<m;i++){ const a=2*Math.PI*i/m; C.push([x+r*Math.cos(a), y+r*Math.sin(a)]); } return C; };

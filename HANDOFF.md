@@ -89,7 +89,11 @@ The drawing must follow the owner's rules:
   - A line that forks into two short branches at the wall keeps the straight one.
   - Notches: small areas filled by the outline's gap-closing that are really outside (reachable from outside without closing) are given back.
   - Lash spikes: protrusions narrower than ~2 mm that are at least 70% ink leave the cookie.
-- Waiting for review round 11.
+- Review round 11: venus still the only pass. The remaining faults are local (see `docs/review/round11_review.md`). Fixed after it:
+  - Closed shapes with an inside under ~1.5 mm (hollow brows, doubled lids) close up and become one line. Lips stay parted.
+  - Convex outline tips get at least a 0.6 mm radius (pad ear tips were needle-sharp).
+- Still open from round 11: ovary arcs at joins; lines 0.1–2.4 mm from the wall or another line (stylish mouth, heart rim, pad channels); nostril hooks still become 2 mm dots; lotus centre knot; hearts hair outline jagged. Several of these are also drawing-side: the new worker rules should reduce them.
+- Waiting for review round 12.
 
 ## Status at review round 7b
 

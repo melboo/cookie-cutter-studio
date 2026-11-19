@@ -130,7 +130,7 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   // 1c. narrow pockets and slits inside the drawing (lips, brows, lash roots: under ~2 mm across) close up, so they become one line
   { const bg=new Uint8Array(W*H); for(let i=0;i<W*H;i++) bg[i]=(!work[i]&&dIn[i]>0)?1:0;
     const dBg=(()=>{ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=bg[i]?1:0; return clDist(inv,W,H); })();
-    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<0.35*ppm) for(const i of c) work[i]=1; } }
+    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<0.75*ppm) for(const i of c) work[i]=1; } }
   dInk=clDist(work,W,H);
   // 2. centre lines of everything else
   sk0=clThin(work,W,H);
