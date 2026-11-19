@@ -1,0 +1,141 @@
+// ---- Centre-line ridges --------------------------------------------------------------
+// Each drawn line is reduced to its centre line. The centre lines are cleaned up (stubs off thick
+// corners removed, lines that sit too close merged, curves smoothed, near-round loops turned into
+// true circles) and drawn again at one even width with round ends. All work is in pixels; ppm = pixels per mm.
+
+function clThin(mask,W,H){ // Zhang-Suen thinning to 1-pixel centre lines
+  const m=mask.slice(); let cand=[]; for(let i=0;i<W*H;i++) if(m[i]) cand.push(i);
+  const del=[]; let changed=true;
+  while(changed){ changed=false;
+    for(let pass=0;pass<2;pass++){ del.length=0;
+      for(const i of cand){ if(!m[i]) continue; const x=i%W, y=(i/W)|0; if(x<1||y<1||x>=W-1||y>=H-1){ m[i]=0; continue; }
+        const p2=m[i-W],p3=m[i-W+1],p4=m[i+1],p5=m[i+W+1],p6=m[i+W],p7=m[i+W-1],p8=m[i-1],p9=m[i-W-1];
+        const B=p2+p3+p4+p5+p6+p7+p8+p9; if(B<2||B>6) continue;
+        const A=(!p2&&p3?1:0)+(!p3&&p4?1:0)+(!p4&&p5?1:0)+(!p5&&p6?1:0)+(!p6&&p7?1:0)+(!p7&&p8?1:0)+(!p8&&p9?1:0)+(!p9&&p2?1:0); if(A!==1) continue;
+        if(pass===0){ if(p2&&p4&&p6) continue; if(p4&&p6&&p8) continue; } else { if(p2&&p4&&p8) continue; if(p2&&p6&&p8) continue; }
+        del.push(i); }
+      for(const i of del) m[i]=0; if(del.length) changed=true; }
+    cand=cand.filter(i=>m[i]); }
+  return m; }
+
+// skeleton -> graph: nodes (line ends, junctions) and edges (pixel paths between them, or closed loops)
+function clGraph(sk,W,H){
+  const off=[-W,-W+1,1,W+1,W,W-1,-1,-W-1], four=[0,2,4,6], diag=[1,3,5,7];
+  const node=new Int32Array(W*H).fill(-1), isN=new Uint8Array(W*H), seen=new Uint8Array(W*H);
+  const ok=i=>i>=W&&i<W*(H-1)&&(i%W)>0&&(i%W)<W-1;
+  for(let i=0;i<W*H;i++){ if(!sk[i]||!ok(i)) continue; let c=0,n=0; for(let k=0;k<8;k++){ const a=sk[i+off[k]], b=sk[i+off[(k+1)%8]]; if(!a&&b) c++; if(a) n++; } if(c!==2||n===0) isN[i]=1; }
+  const nodes=[];
+  for(let i=0;i<W*H;i++){ if(!isN[i]||node[i]>=0) continue; const id=nodes.length, st=[i], px=[]; node[i]=id;
+    while(st.length){ const q=st.pop(); px.push(q); for(const o of off){ const r=q+o; if(ok(r)&&isN[r]&&node[r]<0){ node[r]=id; st.push(r); } } }
+    let x=0,y=0; for(const q of px){ x+=q%W; y+=(q/W)|0; } nodes.push({x:x/px.length, y:y/px.length, px}); }
+  const P=i=>[i%W,(i/W)|0], edges=[];
+  for(let id=0;id<nodes.length;id++) for(const s of nodes[id].px) for(const o of off){ const q=s+o; if(!ok(q)||!sk[q]) continue;
+    if(isN[q]){ const b=node[q]; if(b>id && !edges.some(e=>(e.a===id&&e.b===b&&e.p.length===2))) edges.push({a:id,b,p:[[nodes[id].x,nodes[id].y],[nodes[b].x,nodes[b].y]]}); continue; }
+    if(seen[q]) continue;
+    const path=[[nodes[id].x,nodes[id].y],P(q)]; seen[q]=1; let cur=q, end=-1;
+    for(;;){ let nx=-1;
+      for(const o of off){ const r=cur+o; if(ok(r)&&isN[r]&&(node[r]!==id||path.length>3)){ end=node[r]; break; } }
+      if(end>=0) break;
+      for(const k of four.concat(diag)){ const r=cur+off[k]; if(ok(r)&&sk[r]&&!isN[r]&&!seen[r]){ nx=r; break; } }
+      if(nx<0) break; seen[nx]=1; path.push(P(nx)); cur=nx; }
+    if(end<0){ end=nodes.length; nodes.push({x:cur%W, y:(cur/W)|0, px:[cur]}); } else path.push([nodes[end].x,nodes[end].y]);
+    edges.push({a:id,b:end,p:path}); }
+  for(let i=0;i<W*H;i++){ if(!sk[i]||isN[i]||seen[i]||!ok(i)) continue; // pure loops
+    const path=[P(i)]; seen[i]=1; let cur=i;
+    for(;;){ let nx=-1; for(const k of four.concat(diag)){ const r=cur+off[k]; if(ok(r)&&sk[r]&&!isN[r]&&!seen[r]){ nx=r; break; } } if(nx<0) break; seen[nx]=1; path.push(P(nx)); cur=nx; }
+    if(path.length>=6) edges.push({a:-1,b:-1,p:path,closed:true}); }
+  return {nodes,edges}; }
+
+function clLen(p){ let L=0; for(let i=1;i<p.length;i++) L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]); return L; }
+function clDeg(G){ const d=new Int32Array(G.nodes.length); for(const e of G.edges){ if(e.closed) continue; d[e.a]++; d[e.b]++; } return d; }
+// join the two edges at every node that has exactly two (a line that just passes through)
+function clMerge(G,keepNode){
+  for(let guard=0;guard<10000;guard++){ const d=clDeg(G); let n=-1; for(let i=0;i<d.length;i++) if(d[i]===2&&!(keepNode&&keepNode[i])){ n=i; break; } if(n<0) return;
+    const es=G.edges.filter(e=>!e.closed&&(e.a===n||e.b===n));
+    if(es.length===1){ const e=es[0]; e.closed=true; e.p=e.p.slice(0,-1); e.a=e.b=-1; continue; } // a loop through one node
+    const [e1,e2]=es; const p1=e1.b===n?e1.p:e1.p.slice().reverse(), o1=e1.b===n?e1.a:e1.b, p2=e2.a===n?e2.p:e2.p.slice().reverse(), o2=e2.a===n?e2.b:e2.a;
+    G.edges=G.edges.filter(e=>e!==e1&&e!==e2); G.edges.push({a:o1,b:o2,p:p1.concat(p2.slice(1))}); } }
+// remove short stubs: a branch that ends freely, sticking off a junction (thick corners, blobs)
+function clPrune(G,minLen,radiusAt){
+  for(let it=0;it<4;it++){ const d=clDeg(G); let cut=false;
+    G.edges=G.edges.filter(e=>{ if(e.closed) return true; const fa=d[e.a]===1, fb=d[e.b]===1; if(fa===fb) return true;
+      const j=fa?G.nodes[e.b]:G.nodes[e.a]; const lim=Math.max(minLen, 1.6*radiusAt(j.x,j.y)); if(clLen(e.p)<lim){ cut=true; return false; } return true; });
+    clMerge(G); if(!cut) break; } }
+
+function clResample(P,step,closed){
+  const pts=closed?P.concat([P[0]]):P; const out=[pts[0].slice()]; let acc=0;
+  for(let i=1;i<pts.length;i++){ let ax=pts[i-1][0], ay=pts[i-1][1]; const bx=pts[i][0], by=pts[i][1]; let L=Math.hypot(bx-ax,by-ay);
+    while(acc+L>=step && L>0){ const t=(step-acc)/L; ax+= (bx-ax)*t; ay+=(by-ay)*t; out.push([ax,ay]); L=Math.hypot(bx-ax,by-ay); acc=0; }
+    acc+=L; }
+  if(!closed){ const e=pts[pts.length-1], l=out[out.length-1]; if(Math.hypot(e[0]-l[0],e[1]-l[1])>step*0.4) out.push(e.slice()); else out[out.length-1]=e.slice(); }
+  else if(out.length>2 && Math.hypot(out[0][0]-out[out.length-1][0],out[0][1]-out[out.length-1][1])<step*0.5) out.pop();
+  return out; }
+// smooth a line: real corners (turning more than ~60 degrees over 1 mm) and line ends stay put, everything else is
+// evened out with a gaussian (sigma in mm). Near-round closed loops become true circles.
+function clSmooth(P,ppm,closed,sigmaMM){
+  const step=0.25*ppm, sig=(sigmaMM||0.6)*ppm; let Q=clResample(P,step,closed); const n=Q.length;
+  if(n<4) return {p:Q,c:closed};
+  if(closed && n>=12){ let cx=0,cy=0; for(const q of Q){ cx+=q[0]; cy+=q[1]; } cx/=n; cy/=n; let R=0; for(const q of Q) R+=Math.hypot(q[0]-cx,q[1]-cy); R/=n; let dev=0; for(const q of Q) dev=Math.max(dev,Math.abs(Math.hypot(q[0]-cx,q[1]-cy)-R));
+    if(dev<0.12*R && R<20*ppm){ const m=Math.max(48,Math.round(2*Math.PI*R/step)); const C=[]; for(let i=0;i<m;i++){ const a=2*Math.PI*i/m; C.push([cx+R*Math.cos(a),cy+R*Math.sin(a)]); } return {p:C,c:true,circle:{cx,cy,R}}; } }
+  const k=Math.max(2,Math.round(1.0*ppm/step)), hw=Math.ceil(2.5*sig/step), idx=j=>closed?((j%n)+n)%n:j;
+  const cs=new Float32Array(n).fill(-1);
+  for(let i=0;i<n;i++){ const a=idx(i-k), b=idx(i+k); if(a<0||b<0||a>=n||b>=n) continue; const u=[Q[a][0]-Q[i][0],Q[a][1]-Q[i][1]], v=[Q[b][0]-Q[i][0],Q[b][1]-Q[i][1]];
+    cs[i]=(u[0]*v[0]+u[1]*v[1])/((Math.hypot(u[0],u[1])*Math.hypot(v[0],v[1]))||1); }
+  const pin=new Uint8Array(n); if(!closed){ pin[0]=pin[n-1]=1; }
+  for(let i=0;i<n;i++){ if(cs[i]<=-0.5) continue; let mx=true; for(let j=-k;j<=k&&mx;j++){ const q=idx(i+j); if(j===0||q<0||q>=n) continue; if(cs[q]>cs[i]||(cs[q]===cs[i]&&q<i)) mx=false; } if(mx) pin[i]=1; }
+  const w=[]; for(let j=0;j<=hw;j++) w.push(Math.exp(-((j*step)**2)/(2*sig*sig)));
+  const R=new Array(n);
+  for(let i=0;i<n;i++){ if(pin[i]){ R[i]=Q[i]; continue; } let sx=w[0]*Q[i][0], sy=w[0]*Q[i][1], sw=w[0];
+    for(const dir of [-1,1]) for(let j=1;j<=hw;j++){ const q=idx(i+dir*j); if(q<0||q>=n) break; sx+=w[j]*Q[q][0]; sy+=w[j]*Q[q][1]; sw+=w[j]; if(pin[q]) break; }
+    R[i]=[sx/sw,sy/sw]; }
+  return {p:R,c:closed}; }
+
+function clComps(mask,W,H){ const lab=new Int32Array(W*H), comps=[];
+  for(let s=0;s<W*H;s++){ if(!mask[s]||lab[s]) continue; const st=[s], px=[]; lab[s]=comps.length+1;
+    while(st.length){ const i=st.pop(); px.push(i); const x=i%W; for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,i-W,i+W,x>0?i-W-1:-1,x<W-1?i-W+1:-1,x>0?i+W-1:-1,x<W-1?i+W+1:-1]) if(j>=0&&j<W*H&&mask[j]&&!lab[j]){ lab[j]=comps.length+1; st.push(j); } }
+    comps.push(px); }
+  return comps; }
+function clDisk(mask,W,H,P,r){ // stamp a round-ended polyline of radius r into mask
+  const r2=r*r; const dot=(cx,cy)=>{ for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(H-1,Math.ceil(cy+r));y++) for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(W-1,Math.ceil(cx+r));x++) if((x-cx)**2+(y-cy)**2<=r2) mask[y*W+x]=1; };
+  for(let i=0;i<P.length;i++){ dot(P[i][0],P[i][1]); if(i){ const a=P[i-1], b=P[i], L=Math.hypot(b[0]-a[0],b[1]-a[1]), n=Math.ceil(L/Math.max(0.5,r*0.5)); for(let k=1;k<n;k++) dot(a[0]+(b[0]-a[0])*k/n, a[1]+(b[1]-a[1])*k/n); } } }
+
+// main: ink = drawn lines inside the cookie (outline included), dIn = distance from outside inside the cookie (px),
+// dInk = half-width of the ink at each pixel (distance to non-ink). Returns {lines:[{p,c}], dots:[{cx,cy,r,ring}]} in px.
+function clRidges(ink,W,H,ppm,dIn,dInk,opt){
+  opt=opt||{}; const wall=(opt.wall||1.4)*ppm, merge=(opt.merge||0.65)*ppm;
+  const dots=[];
+  // 1. separate small round blobs (pupils, seeds) are dots, not lines
+  const work=ink.slice();
+  for(const c of clComps(ink,W,H)){ let x0=W,x1=0,y0=H,y1=0,cx=0,cy=0; for(const i of c){ const x=i%W,y=(i/W)|0; cx+=x; cy+=y; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+    cx/=c.length; cy/=c.length; const ar=Math.sqrt(c.length/Math.PI); if(Math.max(x1-x0,y1-y0)>7*ppm) continue;
+    let rmax=0; for(const i of c) rmax=Math.max(rmax,Math.hypot(i%W-cx,((i/W)|0)-cy));
+    if(rmax<=ar*1.5 && ar>=0.6*ppm){ dots.push({cx,cy,r:ar}); for(const i of c) work[i]=0; } }
+  // 2. centre lines of everything else
+  const radiusAt=(x,y)=>{ const i=Math.round(y)*W+Math.round(x); return dInk[i]||0; };
+  let G=clGraph(clThin(work,W,H),W,H); clMerge(G); clPrune(G,1.0*ppm,radiusAt);
+  // 3. the drawn outline belongs to the cutting wall: its centre line goes, lines that meet it keep their end at the wall
+  const hws=[]; for(const e of G.edges) for(const p of e.p){ const i=Math.round(p[1])*W+Math.round(p[0]); if(dIn[i]<3*ppm) hws.push(dInk[i]); }
+  hws.sort((a,b)=>a-b); const hwOut=hws.length?hws[hws.length>>1]:0.6*ppm, band=2*hwOut+0.35*ppm;
+  const atWall=new Uint8Array(G.nodes.length);
+  G.edges=G.edges.filter(e=>{ let k=0; for(const p of e.p){ if(dIn[Math.round(p[1])*W+Math.round(p[0])]<=band) k++; }
+    if(k>=0.6*e.p.length){ if(!e.closed){ atWall[e.a]=1; atWall[e.b]=1; } return false; } return true; });
+  clMerge(G,atWall);
+  // 4. lines closer than ~2.4 mm (centre to centre) can't hold dough between them: draw them fat and take the centre again
+  const fat=new Uint8Array(W*H); for(const e of G.edges) clDisk(fat,W,H,e.closed?e.p.concat([e.p[0]]):e.p,merge);
+  const dFat=(()=>{ const out=new Float32Array(W*H); for(let i=0;i<W*H;i++) out[i]=fat[i]?merge:0; return out; })();
+  G=clGraph(clThin(fat,W,H),W,H); clMerge(G); clPrune(G,1.0*ppm,()=>merge);
+  // 5. leftovers: tiny pieces go, a small merged knot (an eye ring with its pupil) becomes a dot
+  const d2=clDeg(G); const lines=[];
+  for(const e of G.edges){ const L=clLen(e.p);
+    if(!e.closed && d2[e.a]===1 && d2[e.b]===1 && L<2.5*ppm){ let cx=0,cy=0; for(const p of e.p){ cx+=p[0]; cy+=p[1]; } cx/=e.p.length; cy/=e.p.length;
+      let near=0; for(const p of e.p){ const i=Math.round(p[1])*W+Math.round(p[0]); near=Math.max(near,ink[i]?1:0); }
+      if(near && L>=0.4*ppm) dots.push({cx,cy,r:Math.max(1.0*ppm,L/2)}); continue; }
+    if(e.closed && L<3*ppm) continue;
+    lines.push(clSmooth(e.p,ppm,!!e.closed,0.6)); }
+  // 6. lines that run along the wall within ~2.3 mm are pulled onto it, so no sliver of dough is left between
+  if(opt.outline){ const O=opt.outline, near=(x,y)=>{ let bd=1e18,bx=0,by=0; for(let i=0;i<O.length;i++){ const a=O[i], b=O[(i+1)%O.length]; const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9; let t=((x-a[0])*dx+(y-a[1])*dy)/L2; t=t<0?0:t>1?1:t; const px=a[0]+dx*t, py=a[1]+dy*t, d=(px-x)**2+(py-y)**2; if(d<bd){ bd=d; bx=px; by=py; } } return [bx,by,Math.sqrt(bd)]; };
+    const D1=1.6*ppm, D2=2.3*ppm, T=0.9*ppm;
+    for(const l of lines) l.p=l.p.map(p=>{ const [nx,ny,d]=near(p[0],p[1]); if(d>=D2||d<1e-6) return p; const t=d<D1?T:T+(d-D1)*(D2-T)/(D2-D1); return [nx+(p[0]-nx)*t/d, ny+(p[1]-ny)*t/d]; }); }
+  // dots: small ones solid (at least 2 mm across), big ones rings
+  for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,1.0*ppm),2.0*ppm); }
+  return {lines,dots,hwOut}; }

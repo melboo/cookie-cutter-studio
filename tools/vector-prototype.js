@@ -54,76 +54,51 @@ function components(mask,W,H){ const lab=new Int32Array(W*H), comps=[]; let n=0;
   for(let s=0;s<W*H;s++){ if(!mask[s]||lab[s]) continue; n++; const st=[s], px=[]; lab[s]=n;
     while(st.length){ const i=st.pop(); px.push(i); const x=i%W; for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,i-W,i+W]) if(j>=0&&j<W*H&&mask[j]&&!lab[j]){lab[j]=n;st.push(j);} } comps.push(px); }
   return comps; }
+
+const vm=require('vm'); const ClipperLib=require(require('path').join(__dirname,'../vendor/clipper.js')); const CL=ClipperLib, SC=1000;
+eval(fs.readFileSync(require('path').join(__dirname,'centerline.js'),'utf8'));
+function toCl(p){return p.map(q=>({X:Math.round(q[0]*SC),Y:Math.round(q[1]*SC)}));}
+function fromCl(p){return p.map(q=>[q.X/SC,q.Y/SC]);}
+const NZ=CL.PolyFillType.pftNonZero;
+function clip(type,subj,clp){ const c=new CL.Clipper(); const s=subj.filter(p=>p&&p.length>2), k=(clp||[]).filter(p=>p&&p.length>2);
+  if(s.length) c.AddPaths(s.map(toCl),CL.PolyType.ptSubject,true); if(k.length) c.AddPaths(k.map(toCl),CL.PolyType.ptClip,true); const out=new CL.Paths(); c.Execute(type,out,NZ,NZ); return out.map(fromCl); }
+const union=a=>clip(CL.ClipType.ctUnion,a,null), diff=(a,b)=>clip(CL.ClipType.ctDifference,a,b), inter=(a,b)=>clip(CL.ClipType.ctIntersection,a,b);
+function offset(paths,d,arc=0.03){ const co=new CL.ClipperOffset(2,arc*SC); co.AddPaths(paths.filter(p=>p.length>2).map(toCl),CL.JoinType.jtRound,CL.EndType.etClosedPolygon); const out=new CL.Paths(); co.Execute(out,d*SC); return out.map(fromCl); }
+function strokeLines(lines,w,arc=0.03){ const co=new CL.ClipperOffset(2,arc*SC); let n=0;
+  for(const l of lines){ if(!l.p||l.p.length<2) continue; co.AddPath(toCl(l.p),CL.JoinType.jtRound,(l.c&&l.p.length>2)?CL.EndType.etClosedLine:CL.EndType.etOpenRound); n++; }
+  if(!n) return []; const out=new CL.Paths(); co.Execute(out,w/2*SC); return out.map(fromCl); }
+const circ=(cx,cy,r)=>{ const C=[]; const m=Math.max(48,Math.round(r*20)); for(let i=0;i<m;i++){ const a=2*Math.PI*i/m; C.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]); } return C; };
+const pd=ps=>ps.map(P=>'M'+P.map(p=>p[0].toFixed(3)+' '+p[1].toFixed(3)).join('L')+'Z').join('');
+
 function run(name){
   const {W,H,ink,edge}=load(`${SRC}/${name}.png`);
-  // drop specks first
   for(const c of components(ink,W,H)) if(c.length<25) for(const i of c) ink[i]=0;
-  // rough scale from the ink extent
   let x0=W,x1=0,y0=H,y1=0; for(let i=0;i<W*H;i++) if(ink[i]){const x=i%W,y=(i/W)|0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;}
-  let ppm=Math.max(x1-x0,y1-y0)/80;
-  // silhouette: the outermost closed outline. Small gaps in it (up to ~2 mm) are closed first, so it cannot leak.
-  // lines cut off at the picture's edge are closed along that edge (for finding the cookie only)
-  const ink2=ink.slice(); { const lab=components(edge,W,H); for(const c of lab) if(c.length>=2){ let a=c[0],b=c[0]; for(const i of c){ if(i<a)a=i; if(i>b)b=i; } } }
-  let touchesEdge=false; for(let k=0;k<W*H;k++) if(edge[k]){ touchesEdge=true; break; }
-  if(touchesEdge) console.error(name+': drawing runs off the picture -> needs a redraw');
-  const silOf=r=>{ const sealed=close(ink2,W,H,Math.round(r)); const white=new Uint8Array(W*H); for(let i=0;i<W*H;i++) white[i]=sealed[i]?0:1;
+  const ppm=Math.max(x1-x0,y1-y0)/80; const notes=[];
+  let touchesEdge=false; for(let k=0;k<W*H;k++) if(edge[k]){ touchesEdge=true; break; } if(touchesEdge) notes.push('runs off the picture');
+  const silOf=r=>{ const sealed=close(ink,W,H,Math.round(r)); const white=new Uint8Array(W*H); for(let i=0;i<W*H;i++) white[i]=sealed[i]?0:1;
     const outside=flood(white,W,H); const m=new Uint8Array(W*H); let a=0; for(let i=0;i<W*H;i++){ m[i]=outside[i]?0:1; a+=m[i]; } return {m,a}; };
-  // smallest gap-closing (1 to 3.5 mm) whose cookie covers at least 90% of what the outermost lines enclose
-  const ref=silOf(ppm*4); let pick=null;
-  for(const mm of [1,1.5,2,2.5,3,3.5]){ const s=silOf(ppm*mm); if(s.a>=0.9*ref.a){ pick=s; break; } }
-  if(!pick){ pick=ref; console.error(name+': outline not closed, cookie may be wrong'); }
-  let sil=pick.m;
-  // keep only the biggest piece (one cookie)
-  { const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
-  // line weight: thin lines are brought up to ~1.1 mm, evenly
+  const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s=silOf(ppm*mm); if(s.a>=0.9*ref.a){ pick=s; break; } } if(!pick){ pick=ref; notes.push('outline not closed'); }
+  let sil=pick.m; { const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
+  let outside=0,tot=0; for(let i=0;i<W*H;i++) if(ink[i]){ tot++; if(!sil[i]) outside++; } if(outside>0.03*tot) notes.push('open outline '+(100*outside/tot).toFixed(0)+'%');
+  // thin parts: narrower than two wall bands plus room for dough
+  { const r=2.15*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
+    const lost=new Uint8Array(W*H); for(let i=0;i<W*H;i++) lost[i]=(sil[i]&&dc[i]>r+1)?1:0; let worst=0; for(const c of components(lost,W,H)) worst=Math.max(worst,c.length);
+    if(worst>2*r*r) notes.push('thin part ('+(worst/ppm/ppm).toFixed(0)+' mm2)'); }
+  // lines a bit thicker if very thin, so the centre line is unbroken
   const di=dist(ink,W,H); const hw=[]; for(let i=0;i<W*H;i++) if(ink[i]) hw.push(di[i]); hw.sort((a,b)=>a-b); const half=hw[Math.floor(hw.length*0.9)]||1;
-  const want=0.55*ppm; let fat=ink; if(half<want){ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=ink[i]?0:1; const dn=dist(inv,W,H); fat=new Uint8Array(W*H); for(let i=0;i<W*H;i++) fat[i]=(ink[i]||dn[i]<=want-half)?1:0; }
-  // ALL ink inside the cookie, outline stroke included, as ONE shape: every join stays exactly as drawn
-  let all=new Uint8Array(W*H); for(let i=0;i<W*H;i++) all[i]=(fat[i]&&sil[i])?1:0;
-  // one even ridge width (~0.9 mm): thick lines are thinned evenly from both sides (joins keep their shape)
-  { const ht=0.45*ppm; const d=dist(all,W,H); const hw2=[]; for(let i=0;i<W*H;i++) if(all[i]) hw2.push(d[i]); hw2.sort((a,b)=>a-b);
-    const h=hw2[Math.floor(hw2.length*0.85)]||ht; const e=h-ht;
-    if(e>0.5){ for(let i=0;i<W*H;i++) all[i]=(all[i]&&d[i]>e)?1:0; }
-    // solid round dots (pupils, seeds) become true-circle rings with an opening of at least 2.5 mm; other thick spots are left as drawn
-    const d2=dist(all,W,H); const core=new Uint8Array(W*H);
-    // only separate dots: an ink piece that is small and touches nothing else
-    for(const comp of components(all,W,H)){ let x0=W,x1=0,y0=H,y1=0; for(const i of comp){const x=i%W,y=(i/W)|0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;}
-      if(Math.max(x1-x0,y1-y0)<=12*ppm) for(const i of comp) if(d2[i]>ht*2.2) core[i]=1; }
-    for(const c of components(core,W,H)){
-      let cx=0,cy=0; for(const i of c){cx+=i%W; cy+=(i/W)|0;} cx/=c.length; cy/=c.length;
-      let rmax=0; for(const i of c){ rmax=Math.max(rmax, Math.hypot(i%W-cx,((i/W)|0)-cy)); }
-      const areaR=Math.sqrt(c.length/Math.PI); if(rmax>areaR*1.6) continue;      // elongated (brow on an eye, thick join): leave it
-      // the whole dot: ink pixels around this core
-      const dotR=rmax+ht*2.2;
-      // nearest other ink from the dot's centre
-      let near=1e9; const look=Math.ceil(dotR+6*ppm); for(let y=Math.max(0,Math.floor(cy-look));y<=Math.min(H-1,cy+look);y++) for(let x=Math.max(0,Math.floor(cx-look));x<=Math.min(W-1,cx+look);x++){ const q=Math.hypot(x-cx,y-cy); if(q>dotR+1 && all[y*W+x] && q<near) near=q; }
-      let R=Math.min(Math.max(dotR, 2.25*ppm), near-2.5*ppm), r=R-ht*2;
-      if(r<1.25*ppm){ R=ppm*1.0; r=-1; }   // no room for a ring: a small solid dot (~2 mm) instead
-      for(let y=Math.floor(cy-R-2);y<=cy+R+2;y++) for(let x=Math.floor(cx-R-2);x<=cx+R+2;x++){ if(x<0||y<0||x>=W||y>=H) continue; const i=y*W+x; const q=Math.hypot(x-cx,y-cy);
-        if(q<=dotR+1) all[i]=0; } 
-      for(let y=Math.floor(cy-R-2);y<=cy+R+2;y++) for(let x=Math.floor(cx-R-2);x<=cx+R+2;x++){ if(x<0||y<0||x>=W||y>=H) continue; const q=Math.hypot(x-cx,y-cy); if(q>=r && q<=R && sil[y*W+x]) all[y*W+x]=1; } } }
-  // the cut edge: bridge pixels that closed a gap in the outline belong to the cutting line too
-  { const tt=Math.max(half,want)*2; const wh=new Uint8Array(W*H); for(let i=0;i<W*H;i++) wh[i]=fat[i]?0:1; const outRaw=flood(wh,W,H);
-    const leak=new Uint8Array(W*H); let nl=0; for(let i=0;i<W*H;i++) if(outRaw[i]&&sil[i]){ leak[i]=1; nl++; }
-    if(nl){ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=leak[i]?0:1; const dl=dist(inv,W,H), dOut=dist(sil,W,H);
-      for(let i=0;i<W*H;i++) if(sil[i] && dOut[i]<=tt && dl[i]<=tt*1.5) all[i]=1; } }
-  for(const c of components(all,W,H)) if(c.length<(ppm*1.5)**2) for(const i of c) all[i]=0;   // fragments under ~1.5 mm go
-  { const holes=new Uint8Array(W*H); for(let i=0;i<W*H;i++) holes[i]=(sil[i]&&!all[i])?1:0; for(const c of components(holes,W,H)) if(c.length<Math.PI*(0.6*ppm)**2) for(const i of c) all[i]=1; }
-  let sx0=W,sx1=0,sy0=H,sy1=0; for(let i=0;i<W*H;i++) if(sil[i]){const x=i%W,y=(i/W)|0; if(x<sx0)sx0=x; if(x>sx1)sx1=x; if(y<sy0)sy0=y; if(y>sy1)sy1=y;}
-  const silPs=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length); const silP=smoothPoly(silPs[0],ppm);
-  { // the cutting wall: an even 1.4 mm band along the outline. Near the wall, only lines that run in from the inside are kept
-    // (they join the band); bulges of the drawn outline (thick corners, lash tips) give way to the even band.
-    const dO=dist(sil,W,H), B=1.4*ppm, T=2.8*ppm, zone=[]; for(let i=0;i<W*H;i++) if(sil[i]&&dO[i]<=T&&all[i]) zone.push(i);
-    zone.sort((a,b)=>dO[b]-dO[a]); const keep=new Uint8Array(W*H); for(let i=0;i<W*H;i++) if(all[i]&&dO[i]>T) keep[i]=1;
-    for(const i of zone){ const x=i%W; for(const j of [i-1,i+1,i-W,i+W,i-W-1,i-W+1,i+W-1,i+W+1]){ if(j<0||j>=W*H||Math.abs(j%W-x)>1) continue; if(keep[j]&&dO[j]>dO[i]){ keep[i]=1; break; } } }
-    for(let i=0;i<W*H;i++) all[i]=(keep[i]||(sil[i]&&dO[i]<=B))?1:0; }   // the cutting wall: an even 1.4 mm band along the outline, lines join it
-  const inkPs=tracePolys(all,W,H,8).map(p=>smoothPoly(p,ppm));
-  let outside=0,tot=0; for(let i=0;i<W*H;i++) if(ink[i]){ tot++; if(!sil[i]) outside++; }
-  if(outside>0.03*tot) console.error(name+': '+(100*outside/tot).toFixed(0)+'% of the drawing is outside the cookie (open outline) -> needs a redraw');
-  const silD=[polyD(silP)], inkD=inkPs.map(polyD);
-  const pad=14+PAD*0, vb=`${sx0-pad} ${sy0-pad} ${sx1-sx0+2*pad} ${sy1-sy0+2*pad}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="420" height="420"><path d="${silD.join(' ')}" fill="#f4ecdc"/><path d="${inkD.join(' ')}" fill="#3c281e" fill-rule="evenodd"/></svg>`;
+  let fat=ink; const want=0.4*ppm; if(half<want){ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=ink[i]?0:1; const dn=dist(inv,W,H); fat=new Uint8Array(W*H); for(let i=0;i<W*H;i++) fat[i]=(ink[i]||dn[i]<=want-half)?1:0; }
+  const all=new Uint8Array(W*H); for(let i=0;i<W*H;i++) all[i]=(fat[i]&&sil[i])?1:0;
+  const silP=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length)[0]; const O=clSmooth(silP,ppm,true,0.6).p;
+  const res=clRidges(all,W,H,ppm,dist(sil,W,H),dist(all,W,H),{outline:O});
+  const mm=P=>P.map(p=>[p[0]/ppm,p[1]/ppm]); const Omm=mm(O);
+  let ridges=strokeLines(res.lines.map(l=>({p:mm(l.p),c:l.c})),0.9);
+  for(const d of res.dots){ const cx=d.cx/ppm, cy=d.cy/ppm, r=d.r/ppm; ridges=ridges.concat(d.ring? strokeLines([{p:circ(cx,cy,r-0.45),c:true}],0.9) : [circ(cx,cy,r)]); }
+  const band=diff([Omm],offset([Omm],-1.4));
+  const plastic=inter(union(ridges.concat(band)),[Omm]);
+  let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9; for(const p of Omm){ bx0=Math.min(bx0,p[0]); by0=Math.min(by0,p[1]); bx1=Math.max(bx1,p[0]); by1=Math.max(by1,p[1]); }
+  const pad=2, vb=`${(bx0-pad).toFixed(2)} ${(by0-pad).toFixed(2)} ${(bx1-bx0+2*pad).toFixed(2)} ${(by1-by0+2*pad).toFixed(2)}`;
+  console.error(name+': '+res.lines.length+' lines, '+res.dots.length+' dots'+(notes.length?' | '+notes.join(', '):''));
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="420" height="420"><path d="${pd([Omm])}" fill="#f4ecdc"/><path d="${pd(plastic)}" fill="#3c281e" fill-rule="nonzero"/></svg>`;
 }
-const names=process.argv.slice(2); let html='<html><body style="margin:0;display:grid;grid-template-columns:repeat(4,420px);gap:6px;background:#fff">';
-for(const n of names){ const sv=run(n); fs.writeFileSync(`${OUT}/${n}_cutter.svg`,sv); html+=`<img src="${SRC}/${n}.png" style="width:420px;height:420px;object-fit:contain;border:1px solid #ddd">`+sv.replace("<svg","<svg style=\"border:1px solid #ddd\""); }
-fs.writeFileSync('/tmp/vtn/out.html',html+'</body></html>'); console.log('ok');
+const names=process.argv.slice(2); for(const n of names){ const t=Date.now(); const sv=run(n); fs.writeFileSync(`${OUT}/${n}_cutter.svg`,sv); console.error('  '+(Date.now()-t)+' ms'); } console.log('ok');

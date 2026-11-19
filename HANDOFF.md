@@ -57,7 +57,8 @@ The drawing must follow the owner's rules:
   - The blade runs along `offset(outline, -0.45)`.
   - Details are `ink ∩ blade line`, and crossbars come from `makeBars`.
   - 3D uses Manifold and three.js; print settings are in `DEFAULT_PRINT`.
-- **Prototype.** `tools/vector-prototype.js` is the same conversion as a Node script for fast iteration. Run it as `SRC=dir_of_pngs OUT=outdir node tools/vector-prototype.js name1 name2 …`. It needs `pngjs` and `imagetracerjs`, and writes `NAME_cutter.svg`, with cream for the cookie and dark for the plastic. Port changes from the prototype to `src/app.js`.
+- **Centre-line ridges (since 19 Nov).** The inner lines are no longer the drawn ink itself. `clRidges()` (in `src/app.js`, mirrored in `tools/centerline.js`) thins the ink to centre lines, builds a graph, drops stubs off thick corners, removes the drawn outline's own centre line (the wall replaces it), merges lines whose centres are closer than 1.3 mm, smooths every line (gaussian, real corners kept), turns near-round loops into true circles and small separate blobs into dots, and pulls lines that run within ~2.3 mm of the wall onto it. Then every line is drawn again at 0.9 mm with round ends (`strokeLines`). The outline is smoothed with `clSmooth`. Parts narrower than ~4.3 mm (`thinPart`) trigger one redraw, like `touchesEdge` and `openOutline`.
+- **Prototype.** `tools/vector-prototype.js` (uses `tools/centerline.js` and `vendor/clipper.js`) is the same conversion as a Node script for fast iteration. Run it as `SRC=dir_of_pngs OUT=outdir node tools/vector-prototype.js name1 name2 …`. It needs `pngjs` and `imagetracerjs`, and writes `NAME_cutter.svg`, with cream for the cookie and dark for the plastic. Port changes from the prototype to `src/app.js`.
 
 ## How quality is judged
 
@@ -66,7 +67,11 @@ The drawing must follow the owner's rules:
 - **Before/after sheets:** always show original | Gemini drawing | cutter.
 - **Test pictures:** contemporary feminist illustrations from Unsplash (free licence), loaded straight from the source: uterus, pad, lotus, nails, hearts, stylish, duo, heart, hands, venus. **Don't commit them** (no third-party images in the public repo). The older set is in `test-images/` (temporary; remove before merging).
 
-## Current status (review round 7b)
+## Current status
+
+19 Nov: the centre-line rewrite above addresses all three round-7b fixes; it is waiting for review round 8. Merging lines more aggressively (1.2 mm) destroyed faces, so it stays at 0.65 mm.
+
+## Status at review round 7b
 
 **0 of 10 cutters pass.** Uterus and venus are close. Full details with coordinates are in `docs/review/round7b_review.md`.
 
