@@ -1124,7 +1124,7 @@ function renderSelbar(){
   }
   if(!sel){
     if(design.art && origImage && redrawnFrom===origURL && !cookieView && !mode3d){ b.classList.add("show");
-      const lab=document.createElement("span"); lab.className="lbl"; lab.textContent="Drawing made from your picture."; b.appendChild(lab);
+      const lab=document.createElement("span"); lab.className="lbl"; lab.textContent=(design.art&&design.art.busy)? "Very detailed picture: try Draw it again, or a simpler picture." : "Drawing made from your picture."; b.appendChild(lab);
       mk("Draw it again", ()=>{ if(origImage){ srcImage=origImage; srcURL=origURL; } redraw(); }, "Make a new drawing from your picture");
       mk("Trace it myself", traceOriginal, "Go back to your picture and trace it yourself"); return; }
     b.classList.remove("show");return;}
@@ -1649,7 +1649,7 @@ function clDisk(mask,W,H,P,r){ // stamp a round-ended polyline of radius r into 
 // main: ink = drawn lines inside the cookie (outline included), dIn = distance from outside inside the cookie (px),
 // dInk = half-width of the ink at each pixel (distance to non-ink). Returns {lines:[{p,c}], dots:[{cx,cy,r,ring}]} in px.
 function clRidges(ink,W,H,ppm,dIn,dInk,opt){
-  opt=opt||{}; const wall=(opt.wall||1.4)*ppm, merge=(opt.merge||0.65)*ppm;
+  opt=opt||{}; const wall=(opt.wall||1.4)*ppm, merge=(opt.merge||0)*ppm;
   const dots=[];
   // 1. separate small round blobs (pupils, seeds) are dots, not lines
   const work=ink.slice();
@@ -1657,9 +1657,19 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){
     cx/=c.length; cy/=c.length; const ar=Math.sqrt(c.length/Math.PI); if(Math.max(x1-x0,y1-y0)>7*ppm) continue;
     let rmax=0; for(const i of c) rmax=Math.max(rmax,Math.hypot(i%W-cx,((i/W)|0)-cy));
     if(rmax<=ar*1.5 && ar>=0.6*ppm){ dots.push({cx,cy,r:ar}); for(const i of c) work[i]=0; } }
+  // 1b. pupils and other solid dots that touch a line (an eye's lid): thick, compact cores of the ink
+  const sk0=clThin(work,W,H);
+  { const hs=[]; for(let i=0;i<W*H;i++) if(sk0[i]) hs.push(dInk[i]); hs.sort((a,b)=>a-b);
+    const hwLine=hs.length?hs[hs.length>>1]:0.5*ppm, t=Math.max(2.0*hwLine, 0.8*ppm);
+    const core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=(work[i]&&dInk[i]>t)?1:0;
+    for(const c of clComps(core,W,H)){ let cx=0,cy=0,x0=W,x1=0,y0=H,y1=0; for(const i of c){ const x=i%W,y=(i/W)|0; cx+=x; cy+=y; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+      cx/=c.length; cy/=c.length; if(Math.max(x1-x0,y1-y0)>3*ppm) continue;
+      let rmax=0; for(const i of c) rmax=Math.max(rmax,Math.hypot(i%W-cx,((i/W)|0)-cy)); if(rmax>Math.sqrt(c.length/Math.PI)*1.8+1) continue;
+      let dmax=0; for(const i of c) dmax=Math.max(dmax,dInk[i]);
+      dots.push({cx,cy,r:Math.max(dmax,1.0*ppm),keep:true}); } }
   // 2. centre lines of everything else
   const radiusAt=(x,y)=>{ const i=Math.round(y)*W+Math.round(x); return dInk[i]||0; };
-  let G=clGraph(clThin(work,W,H),W,H); clMerge(G); clPrune(G,1.0*ppm,radiusAt);
+  let G=clGraph(sk0,W,H); clMerge(G); clPrune(G,1.0*ppm,radiusAt);
   // 3. the drawn outline belongs to the cutting wall: its centre line goes, lines that meet it keep their end at the wall
   const hws=[]; for(const e of G.edges) for(const p of e.p){ const i=Math.round(p[1])*W+Math.round(p[0]); if(dIn[i]<3*ppm) hws.push(dInk[i]); }
   hws.sort((a,b)=>a-b); const hwOut=hws.length?hws[hws.length>>1]:0.6*ppm, band=2*hwOut+0.35*ppm;
@@ -1667,10 +1677,9 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){
   G.edges=G.edges.filter(e=>{ let k=0; for(const p of e.p){ if(dIn[Math.round(p[1])*W+Math.round(p[0])]<=band) k++; }
     if(k>=0.6*e.p.length){ if(!e.closed){ atWall[e.a]=1; atWall[e.b]=1; } return false; } return true; });
   clMerge(G,atWall);
-  // 4. lines closer than ~2.4 mm (centre to centre) can't hold dough between them: draw them fat and take the centre again
-  const fat=new Uint8Array(W*H); for(const e of G.edges) clDisk(fat,W,H,e.closed?e.p.concat([e.p[0]]):e.p,merge);
-  const dFat=(()=>{ const out=new Float32Array(W*H); for(let i=0;i<W*H;i++) out[i]=fat[i]?merge:0; return out; })();
-  G=clGraph(clThin(fat,W,H),W,H); clMerge(G); clPrune(G,1.0*ppm,()=>merge);
+  // 4. (optional) lines closer than 2*merge (centre to centre) are merged into one; off by default, it invents knots in faces
+  if(opt.merge){ const fat=new Uint8Array(W*H); for(const e of G.edges) clDisk(fat,W,H,e.closed?e.p.concat([e.p[0]]):e.p,merge);
+    G=clGraph(clThin(fat,W,H),W,H); clMerge(G); clPrune(G,1.0*ppm,()=>merge); }
   // 5. leftovers: tiny pieces go, a small merged knot (an eye ring with its pupil) becomes a dot
   const d2=clDeg(G); const lines=[];
   for(const e of G.edges){ const L=clLen(e.p);
@@ -1678,11 +1687,17 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){
       let near=0; for(const p of e.p){ const i=Math.round(p[1])*W+Math.round(p[0]); near=Math.max(near,ink[i]?1:0); }
       if(near && L>=0.4*ppm) dots.push({cx,cy,r:Math.max(1.0*ppm,L/2)}); continue; }
     if(e.closed && L<3*ppm) continue;
-    lines.push(clSmooth(e.p,ppm,!!e.closed,0.6)); }
-  // 6. lines that run along the wall within ~2.3 mm are pulled onto it, so no sliver of dough is left between
+    const sm=clSmooth(e.p,ppm,!!e.closed,0.6); if(!e.closed){ sm.wa=!opt.merge&&!!atWall[e.a]; sm.wb=!opt.merge&&!!atWall[e.b]; } lines.push(sm); }
+  // 6. lines that run within ~2.9 mm of the wall are pulled onto it (no sliver of dough between), ends that met the drawn
+  //    outline run into the wall, true circles stay as they are
   if(opt.outline){ const O=opt.outline, near=(x,y)=>{ let bd=1e18,bx=0,by=0; for(let i=0;i<O.length;i++){ const a=O[i], b=O[(i+1)%O.length]; const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9; let t=((x-a[0])*dx+(y-a[1])*dy)/L2; t=t<0?0:t>1?1:t; const px=a[0]+dx*t, py=a[1]+dy*t, d=(px-x)**2+(py-y)**2; if(d<bd){ bd=d; bx=px; by=py; } } return [bx,by,Math.sqrt(bd)]; };
-    const D1=1.6*ppm, D2=2.3*ppm, T=0.9*ppm;
-    for(const l of lines) l.p=l.p.map(p=>{ const [nx,ny,d]=near(p[0],p[1]); if(d>=D2||d<1e-6) return p; const t=d<D1?T:T+(d-D1)*(D2-T)/(D2-D1); return [nx+(p[0]-nx)*t/d, ny+(p[1]-ny)*t/d]; }); }
+    const D=2.9*ppm, T=0.8*ppm;
+    for(const l of lines){ if(l.circle) continue; let moved=false;
+      l.p=l.p.map(p=>{ const [nx,ny,d]=near(p[0],p[1]); if(d>=D||d<1e-6) return p; moved=true; return [nx+(p[0]-nx)*T/d, ny+(p[1]-ny)*T/d]; });
+      if(!l.c){ for(const [end,flag] of [[0,l.wa],[l.p.length-1,l.wb]]){ if(!flag) continue; const p=l.p[end], [nx,ny,d]=near(p[0],p[1]); if(d>T){ const q=[nx+(p[0]-nx)*T/d, ny+(p[1]-ny)*T/d]; if(end===0) l.p.unshift(q); else l.p.push(q); moved=true; } } }
+      if(moved){ const sm=clSmooth(l.p,ppm,l.c,0.5); l.p=sm.p; } } }
+  // nubs: open lines shorter than 1 mm that hang off nothing
+  for(let i=lines.length-1;i>=0;i--){ const l=lines[i]; if(!l.c && clLen(l.p)<1.0*ppm) lines.splice(i,1); }
   // dots: small ones solid (at least 2 mm across), big ones rings
   for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,1.0*ppm),2.0*ppm); }
   return {lines,dots,hwOut}; }
@@ -1711,6 +1726,10 @@ function vectorDesign(img, sizeMM){
   const silOf=r=>{ const s=close(ink,Math.round(r)), out=flood(inv(s)); const m=new Uint8Array(N); let a=0; for(let i=0;i<N;i++){ m[i]=out[i]?0:1; a+=m[i]; } return {m,a}; };
   const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s2=silOf(ppm*mm); if(s2.a>=0.9*ref.a){ pick=s2; break; } }
   let sil=(pick||ref).m; { const cs=comps(sil); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(N); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
+  // hair-thin spikes (lash tips poking through the outline) are not part of the cookie
+  { const r=0.8*ppm, dI=dist(sil), core=new Uint8Array(N); for(let i=0;i<N;i++) core[i]=dI[i]>r?0:1; const dc=dist(core);
+    for(let i=0;i<N;i++) if(sil[i]&&dc[i]>r+0.5) sil[i]=0;
+    const cs=comps(sil); cs.sort((a,b)=>b.length-a.length); const keep=new Uint8Array(N); if(cs[0]) for(const i of cs[0]) keep[i]=1; sil=keep; }
   // much of the drawing outside the cookie means its outline is open: better to ask for a new drawing
   let outsideInk=0, totInk=0; for(let i=0;i<N;i++) if(ink[i]){ totInk++; if(!sil[i]) outsideInk++; }
   const openOutline = outsideInk > 0.03*totInk;
@@ -1729,17 +1748,18 @@ function vectorDesign(img, sizeMM){
     for(const path of layer){ const pts=[]; for(const s of path.segments){ if(s.type==="L"){ pts.push([s.x1,s.y1]); } else { for(let u=0;u<1;u+=0.2){ const a=(1-u)*(1-u), b=2*(1-u)*u, c=u*u; pts.push([a*s.x1+b*s.x2+c*s.x3, a*s.y1+b*s.y2+c*s.y3]); } } }
       if(pts.length>=3) polys.push(pts); } return polys; };
   const silPx=tracePolys(sil, 40).sort((a,b)=>b.length-a.length)[0]; if(!silPx) return null;
-  const Opx=clSmooth(silPx, ppm, true, 0.6).p;
+  const Opx=clSmooth(silPx, ppm, true, 1.2).p;
   // inner lines: centre lines drawn again at one even width (see clRidges)
   const res=clRidges(all, W, H, ppm, dist(sil), dist(all), {outline:Opx});
   const cx=(x0+x1)/2, cy=(y0+y1)/2, toMM=p=>p.map(q=>[(q[0]-cx)/ppm, (q[1]-cy)/ppm]);
   const outline=toMM(Opx); if(Math.abs(area(outline))<1) return null;
+  let lineLen=0; for(const l of res.lines) lineLen+=clLen(l.p)/ppm; const tooBusy = lineLen/Math.abs(area(outline)) > 0.25;
   const circ=(x,y,r)=>{ const C=[], m=Math.max(48,Math.round(r*20)); for(let i=0;i<m;i++){ const a=2*Math.PI*i/m; C.push([x+r*Math.cos(a), y+r*Math.sin(a)]); } return C; };
   let ridges=strokeLines(res.lines.map(l=>({p:toMM(l.p), c:l.c})), 0.9);
   for(const d of res.dots){ const [[x,y]]=toMM([[d.cx,d.cy]]), r=d.r/ppm; ridges=ridges.concat(d.ring ? strokeLines([{p:circ(x,y,r-0.45), c:true}], 0.9) : [circ(x,y,r)]); }
   const band=diff([outline], offset([outline], -1.4));
   let inkMM=[]; try{ inkMM=inter(union(ridges.concat(band)), [outline]); }catch(e){ inkMM=[]; }
-  return {outline, ink:inkMM, touchesEdge, openOutline, thinPart, ppm};
+  return {outline, ink:inkMM, touchesEdge, openOutline, thinPart, tooBusy, ppm};
 }
 
 function subjectBox(im){
@@ -1792,11 +1812,11 @@ async function redraw(){
     pushHist(); srcImage=im; srcURL=out.image; redrawnFrom=from;
     design.sketch=[]; design.holes=[]; showImage=false;
     let vd=null; if(redrawStyle()==="lineart"){ try{ vd=vectorDesign(im, sizeMM()); }catch(err){ console.warn(err); vd=null; } }
-    if(vd && (vd.touchesEdge || vd.openOutline || vd.thinPart) && redrawTries<1){ redrawTries++; setBusy(false); return redraw(); }   // drawing ran off the picture: ask for a new one once
+    if(vd && (vd.touchesEdge || vd.openOutline || vd.thinPart || vd.tooBusy) && redrawTries<1){ redrawTries++; setBusy(false); return redraw(); }   // drawing ran off the picture: ask for a new one once
     if(vd && vd.outline && vd.ink.length){
       design.outline=vd.outline; design.lines=[]; design.blobs=[]; design.holes=[]; design.sketch=[];
       design.img={k:1/vd.ppm*0+1, tx:0, ty:0, w:im.naturalWidth, h:im.naturalHeight}; design.img=null;
-      design.art={ink:vd.ink, w:0.9, v:(artV++), real:true, vector:true, resnap:true};
+      design.art={ink:vd.ink, w:0.9, v:(artV++), real:true, vector:true, resnap:true, busy:!!vd.tooBusy};
       tracePushed=true; artSync(); render();
     } else { forceInkTrace=(redrawStyle()==="lineart"); try{ runTrace(); } finally { forceInkTrace=false; } }
     redrawTries=0; setTool("select"); fitView(); markDirty(); renderSelbar();

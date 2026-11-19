@@ -69,7 +69,13 @@ The drawing must follow the owner's rules:
 
 ## Current status
 
-19 Nov: the centre-line rewrite above addresses all three round-7b fixes; it is waiting for review round 8. Merging lines more aggressively (1.2 mm) destroyed faces, so it stays at 0.65 mm.
+19 Nov, after review round 8 (`docs/review/round8_review.md`):
+- Pupils and dots that touch a line (an eye's lid) are found as thick compact cores (more than 2x the line's half-width) and kept as dots of at least 2 mm. Round 8 had deleted them.
+- Line merging is off by default (`opt.merge`): at any radius it invented knots and crossings in faces.
+- Lines within 2.9 mm of the wall are pulled onto it along their whole length, then re-smoothed; line ends that met the drawn outline run into the wall; true circles are never pulled.
+- Hair-thin spikes (lash tips through the outline) are removed from the cookie shape (opening by 0.8 mm); the outline is smoothed more (sigma 1.2 mm).
+- `tooBusy`: total line length per cookie area over 0.25 mm/mm² (the crowded heart is 0.29, all others 0.19 or less) asks for one redraw; if it is still busy the bar says so.
+- Waiting for review round 9.
 
 ## Status at review round 7b
 

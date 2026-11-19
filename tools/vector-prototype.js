@@ -80,6 +80,9 @@ function run(name){
     const outside=flood(white,W,H); const m=new Uint8Array(W*H); let a=0; for(let i=0;i<W*H;i++){ m[i]=outside[i]?0:1; a+=m[i]; } return {m,a}; };
   const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s=silOf(ppm*mm); if(s.a>=0.9*ref.a){ pick=s; break; } } if(!pick){ pick=ref; notes.push('outline not closed'); }
   let sil=pick.m; { const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
+  { const r=0.8*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
+    for(let i=0;i<W*H;i++) if(sil[i]&&dc[i]>r+0.5) sil[i]=0;
+    const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); const keep=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) keep[i]=1; sil=keep; }
   let outside=0,tot=0; for(let i=0;i<W*H;i++) if(ink[i]){ tot++; if(!sil[i]) outside++; } if(outside>0.03*tot) notes.push('open outline '+(100*outside/tot).toFixed(0)+'%');
   // thin parts: narrower than two wall bands plus room for dough
   { const r=2.15*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
@@ -89,9 +92,10 @@ function run(name){
   const di=dist(ink,W,H); const hw=[]; for(let i=0;i<W*H;i++) if(ink[i]) hw.push(di[i]); hw.sort((a,b)=>a-b); const half=hw[Math.floor(hw.length*0.9)]||1;
   let fat=ink; const want=0.4*ppm; if(half<want){ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=ink[i]?0:1; const dn=dist(inv,W,H); fat=new Uint8Array(W*H); for(let i=0;i<W*H;i++) fat[i]=(ink[i]||dn[i]<=want-half)?1:0; }
   const all=new Uint8Array(W*H); for(let i=0;i<W*H;i++) all[i]=(fat[i]&&sil[i])?1:0;
-  const silP=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length)[0]; const O=clSmooth(silP,ppm,true,0.6).p;
+  const silP=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length)[0]; const O=clSmooth(silP,ppm,true,1.2).p;
   const res=clRidges(all,W,H,ppm,dist(sil,W,H),dist(all,W,H),{outline:O});
   const mm=P=>P.map(p=>[p[0]/ppm,p[1]/ppm]); const Omm=mm(O);
+  { let L=0; for(const l of res.lines) L+=clLen(l.p)/ppm; const A=Math.abs(Omm.reduce((a,p,i)=>{ const q=Omm[(i+1)%Omm.length]; return a+p[0]*q[1]-q[0]*p[1]; },0))/2; const dens=L/A; notes.push('density '+dens.toFixed(3)+' mm/mm2'+(dens>0.30?' -> BUSY':'')); }
   let ridges=strokeLines(res.lines.map(l=>({p:mm(l.p),c:l.c})),0.9);
   for(const d of res.dots){ const cx=d.cx/ppm, cy=d.cy/ppm, r=d.r/ppm; ridges=ridges.concat(d.ring? strokeLines([{p:circ(cx,cy,r-0.45),c:true}],0.9) : [circ(cx,cy,r)]); }
   const band=diff([Omm],offset([Omm],-1.4));
