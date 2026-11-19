@@ -74,15 +74,19 @@ function run(name){
   const {W,H,ink,edge}=load(`${SRC}/${name}.png`);
   for(const c of components(ink,W,H)) if(c.length<25) for(const i of c) ink[i]=0;
   let x0=W,x1=0,y0=H,y1=0; for(let i=0;i<W*H;i++) if(ink[i]){const x=i%W,y=(i/W)|0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;}
-  const ppm=Math.max(x1-x0,y1-y0)/80; const notes=[];
+  let ppm=Math.max(x1-x0,y1-y0)/80; const notes=[];
   let touchesEdge=false; for(let k=0;k<W*H;k++) if(edge[k]){ touchesEdge=true; break; } if(touchesEdge) notes.push('runs off the picture');
   const silOf=r=>{ const sealed=close(ink,W,H,Math.round(r)); const white=new Uint8Array(W*H); for(let i=0;i<W*H;i++) white[i]=sealed[i]?0:1;
     const outside=flood(white,W,H); const m=new Uint8Array(W*H); let a=0; for(let i=0;i<W*H;i++){ m[i]=outside[i]?0:1; a+=m[i]; } return {m,a}; };
   const ref=silOf(ppm*4); let pick=null; for(const mm of [1,1.5,2,2.5,3,3.5]){ const s=silOf(ppm*mm); if(s.a>=0.9*ref.a){ pick=s; break; } } if(!pick){ pick=ref; notes.push('outline not closed'); }
   let sil=pick.m; { const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); sil=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) sil[i]=1; }
-  { const r=0.8*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
-    for(let i=0;i<W*H;i++) if(sil[i]&&dc[i]>r+0.5) sil[i]=0;
+  { // strokes poking out of the cookie (lash tips through the outline): bits beyond a 1.5 mm opening that are nearly all ink
+    const r=1.5*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
+    const pro=new Uint8Array(W*H); for(let i=0;i<W*H;i++) pro[i]=(sil[i]&&dc[i]>r+0.5)?1:0;
+    for(const c of components(pro,W,H)){ let k=0; for(const i of c) if(ink[i]) k++; if(k>=0.85*c.length) for(const i of c) sil[i]=0; }
     const cs=components(sil,W,H); cs.sort((a,b)=>b.length-a.length); const keep=new Uint8Array(W*H); if(cs[0]) for(const i of cs[0]) keep[i]=1; sil=keep; }
+  // the cookie decides the size: rescale so the cookie itself is 80 mm
+  { let a0=W,a1=0,b0=H,b1=0; for(let i=0;i<W*H;i++) if(sil[i]){ const x=i%W,y=(i/W)|0; if(x<a0)a0=x; if(x>a1)a1=x; if(y<b0)b0=y; if(y>b1)b1=y; } ppm=Math.max(a1-a0,b1-b0)/80; }
   let outside=0,tot=0; for(let i=0;i<W*H;i++) if(ink[i]){ tot++; if(!sil[i]) outside++; } if(outside>0.03*tot) notes.push('open outline '+(100*outside/tot).toFixed(0)+'%');
   // thin parts: narrower than two wall bands plus room for dough
   { const r=2.15*ppm, dI=dist(sil,W,H), core=new Uint8Array(W*H); for(let i=0;i<W*H;i++) core[i]=dI[i]>r?0:1; const dc=dist(core,W,H);
@@ -92,14 +96,17 @@ function run(name){
   const di=dist(ink,W,H); const hw=[]; for(let i=0;i<W*H;i++) if(ink[i]) hw.push(di[i]); hw.sort((a,b)=>a-b); const half=hw[Math.floor(hw.length*0.9)]||1;
   let fat=ink; const want=0.4*ppm; if(half<want){ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=ink[i]?0:1; const dn=dist(inv,W,H); fat=new Uint8Array(W*H); for(let i=0;i<W*H;i++) fat[i]=(ink[i]||dn[i]<=want-half)?1:0; }
   const all=new Uint8Array(W*H); for(let i=0;i<W*H;i++) all[i]=(fat[i]&&sil[i])?1:0;
-  const silP=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length)[0]; const O=clSmooth(silP,ppm,true,1.2).p;
+  const silP=tracePolys(sil,W,H,40).sort((a,b)=>b.length-a.length)[0]; const O=clSmooth(silP,ppm,true,1.2,0.35).p;
   const res=clRidges(all,W,H,ppm,dist(sil,W,H),dist(all,W,H),{outline:O});
   const mm=P=>P.map(p=>[p[0]/ppm,p[1]/ppm]); const Omm=mm(O);
-  { let L=0; for(const l of res.lines) L+=clLen(l.p)/ppm; const A=Math.abs(Omm.reduce((a,p,i)=>{ const q=Omm[(i+1)%Omm.length]; return a+p[0]*q[1]-q[0]*p[1]; },0))/2; const dens=L/A; notes.push('density '+dens.toFixed(3)+' mm/mm2'+(dens>0.30?' -> BUSY':'')); }
+  { let L=0; for(const l of res.lines) L+=clLen(l.p)/ppm; const A=Math.abs(Omm.reduce((a,p,i)=>{ const q=Omm[(i+1)%Omm.length]; return a+p[0]*q[1]-q[0]*p[1]; },0))/2; const dens=L/A; notes.push('density '+dens.toFixed(3)+' pieces/1000mm2 '+(1000*(res.lines.length+res.dots.length)/A).toFixed(1)); }
   let ridges=strokeLines(res.lines.map(l=>({p:mm(l.p),c:l.c})),0.9);
   for(const d of res.dots){ const cx=d.cx/ppm, cy=d.cy/ppm, r=d.r/ppm; ridges=ridges.concat(d.ring? strokeLines([{p:circ(cx,cy,r-0.45),c:true}],0.9) : [circ(cx,cy,r)]); }
   const band=diff([Omm],offset([Omm],-1.4));
   const plastic=inter(union(ridges.concat(band)),[Omm]);
+  { const sa=p=>p.reduce((a,q,i)=>{ const r=p[(i+1)%p.length]; return a+q[0]*r[1]-r[0]*q[1]; },0)/2; let big=plastic[0], ba=0; for(const p of plastic){ if(Math.abs(sa(p))>ba){ ba=Math.abs(sa(p)); big=p; } }
+    const sg=Math.sign(sa(big)); let cells=0; for(const p of plastic){ const a=sa(p); if(Math.sign(a)!==sg && Math.abs(a)<6.25) cells++; } notes.push('small cells '+cells); }
+  { const inner=offset([Omm],-1.4).filter(p=>Math.abs(p.reduce((a,q,i)=>{ const r=p[(i+1)%p.length]; return a+q[0]*r[1]-r[0]*q[1]; },0))/2>4); if(inner.filter(p=>p.reduce((a,q,i)=>{ const r=p[(i+1)%p.length]; return a+q[0]*r[1]-r[0]*q[1]; },0)>0).length>1) notes.push('SPLIT into pieces'); }
   let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9; for(const p of Omm){ bx0=Math.min(bx0,p[0]); by0=Math.min(by0,p[1]); bx1=Math.max(bx1,p[0]); by1=Math.max(by1,p[1]); }
   const pad=2, vb=`${(bx0-pad).toFixed(2)} ${(by0-pad).toFixed(2)} ${(bx1-bx0+2*pad).toFixed(2)} ${(by1-by0+2*pad).toFixed(2)}`;
   console.error(name+': '+res.lines.length+' lines, '+res.dots.length+' dots'+(notes.length?' | '+notes.join(', '):''));

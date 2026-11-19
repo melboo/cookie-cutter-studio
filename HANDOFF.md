@@ -75,7 +75,14 @@ The drawing must follow the owner's rules:
 - Lines within 2.9 mm of the wall are pulled onto it along their whole length, then re-smoothed; line ends that met the drawn outline run into the wall; true circles are never pulled.
 - Hair-thin spikes (lash tips through the outline) are removed from the cookie shape (opening by 0.8 mm); the outline is smoothed more (sigma 1.2 mm).
 - `tooBusy`: total line length per cookie area over 0.25 mm/mm² (the crowded heart is 0.29, all others 0.19 or less) asks for one redraw; if it is still busy the bar says so.
-- Waiting for review round 9.
+- Review round 9: venus PASSES (first one). Fixed after it:
+  - Dots only for thick, round cores (inscribed radius over 2x the line half-width, roundness 1.35), never within ~1.6 mm + dot radius of the wall.
+  - Narrow enclosed pockets inside the drawing (under ~2 mm across: lips, brows, lash roots) are filled first, so they become one line.
+  - Wall pull only for stretches that run ALONG the wall (within 3.5 mm); lines heading into the wall keep their direction, and ends that met the outline run straight on into it. Closed shapes are never pulled.
+  - Outline smoothing moves no point more than 0.35 mm (finger notches stay); strokes poking out of the cookie (lash tips) are removed when a protrusion is at least 85% ink.
+  - Size comes from the cookie itself, not from all ink (duo was 60 mm instead of 80).
+  - `tooBusy` is now separate lines + dots per 1000 mm² over 28 (heart 37, others 19 or less). A cookie whose dough splits into pieces inside the wall counts as `thinPart`. Both show a short message in the bar after the one automatic redraw.
+- Waiting for review round 10.
 
 ## Status at review round 7b
 
