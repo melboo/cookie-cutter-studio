@@ -105,7 +105,8 @@ function run(name){
   const dS=dist(sil,W,H); let res=clRidges(all,W,H,ppm,dS,dist(all,W,H),{outline:O}); res=clRefine(res,sil,W,H,ppm,dS,{outline:O}); if(res.closedGaps) notes.push('closed '+res.closedGaps+' narrow gaps');
   const mm=P=>P.map(p=>[p[0]/ppm,p[1]/ppm]); let Omm=mm(O);
   // no needle-sharp outline points: convex tips get at least a 0.6 mm radius
-  { const r=offset(offset([Omm],-0.6,0.01),0.6,0.01); let best=null,ba=0; for(const p of r){ const a=Math.abs(p.reduce((s,q,i)=>{ const t=p[(i+1)%p.length]; return s+q[0]*t[1]-t[0]*q[1]; },0)); if(a>ba){ ba=a; best=p; } } if(best) Omm=best; }
+  { const r=offset(offset(offset(offset([Omm],1.2,0.01),-1.2,0.01),-0.6,0.01),0.6,0.01); let best=null,ba=0;   // inside corners 1.2 mm, tips 0.6 mm
+ for(const p of r){ const a=Math.abs(p.reduce((s,q,i)=>{ const t=p[(i+1)%p.length]; return s+q[0]*t[1]-t[0]*q[1]; },0)); if(a>ba){ ba=a; best=p; } } if(best) Omm=best; }
   { let L=0; for(const l of res.lines) L+=clLen(l.p)/ppm; const A=Math.abs(Omm.reduce((a,p,i)=>{ const q=Omm[(i+1)%Omm.length]; return a+p[0]*q[1]-q[0]*p[1]; },0))/2; const dens=L/A; notes.push('density '+dens.toFixed(3)+' pieces/1000mm2 '+(1000*(res.lines.length+res.dots.length)/A).toFixed(1)); }
   let ridges=strokeLines(res.lines.map(l=>({p:mm(l.p),c:l.c})),0.9);
   for(const d of res.dots){ const cx=d.cx/ppm, cy=d.cy/ppm, r=d.r/ppm; ridges=ridges.concat(d.ring? strokeLines([{p:circ(cx,cy,r-0.45),c:true}],0.9) : [circ(cx,cy,r)]); }

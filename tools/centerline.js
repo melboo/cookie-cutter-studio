@@ -126,11 +126,27 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
       let rmax=0; for(const i of c) rmax=Math.max(rmax,Math.hypot(i%W-cx,((i/W)|0)-cy)); if(rmax>Math.sqrt(c.length/Math.PI)*1.35+1) continue;   // round only
       let dmax=0; for(const i of c) dmax=Math.max(dmax,dInk[i]); const r=Math.max(dmax,0.8*ppm);
       if(dIn[Math.round(cy)*W+Math.round(cx)] < r+1.6*ppm) continue;                                              // never on the wall
-      dots.push({cx,cy,r,keep:true}); } }
+      dots.push({cx,cy,r,keep:true});
+      } }
+  // an eye drawn as one small separate shape (almond + pupil) is rebuilt as its almond outline plus the pupil dot,
+  // because thinning a narrow almond with a big pupil inside collapses it into a stub
+  if(!opt.noDots && dots.some(d=>d.keep)){ const lab=new Int32Array(W*H).fill(-1), cs=clComps(work,W,H); cs.forEach((c,k)=>{ for(const i of c) lab[i]=k; });
+    const done=new Set();
+    for(const d of dots){ if(!d.keep) continue; const k=lab[Math.round(d.cy)*W+Math.round(d.cx)]; if(k<0||done.has(k)) continue; const c=cs[k];
+      let x0=W,x1=0,y0=H,y1=0; for(const i of c){ const x=i%W,y=(i/W)|0; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+      if(Math.max(x1-x0,y1-y0)>12*ppm) continue; done.add(k);
+      const bw=x1-x0+3, bh=y1-y0+3, sub=new Uint8Array(bw*bh); for(const i of c){ sub[((i/W|0)-y0+1)*bw+(i%W-x0+1)]=1; }
+      const out=new Uint8Array(bw*bh); { const st=[0]; out[0]=1; while(st.length){ const q=st.pop(), qx=q%bw, qy=(q/bw)|0; for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=qx+dx, ny=qy+dy; if(nx<0||ny<0||nx>=bw||ny>=bh) continue; const r=ny*bw+nx; if(!out[r]&&!sub[r]){ out[r]=1; st.push(r); } } } }
+      const fill=new Uint8Array(bw*bh); for(let i=0;i<bw*bh;i++) fill[i]=out[i]?0:1; const dd=clDist(fill,bw,bh), t=0.45*ppm;
+      for(const i of c) work[i]=0;
+      for(let i=0;i<bw*bh;i++) if(fill[i] && Math.abs(dd[i]-t)<=0.9) work[(((i/bw)|0)+y0-1)*W+(i%bw)+x0-1]=1; }
+    dInk=clDist(work,W,H); }
+
   // 1c. narrow pockets and slits inside the drawing (lips, brows, lash roots: under ~2 mm across) close up, so they become one line
   { const bg=new Uint8Array(W*H); for(let i=0;i<W*H;i++) bg[i]=(!work[i]&&dIn[i]>0)?1:0;
     const dBg=(()=>{ const inv=new Uint8Array(W*H); for(let i=0;i<W*H;i++) inv[i]=bg[i]?1:0; return clDist(inv,W,H); })();
-    for(const c of clComps(bg,W,H)){ let mx=0, wall=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; } if(!wall && mx<0.75*ppm) for(const i of c) work[i]=1; } }
+    const nearDot=i=>{ const x=i%W, y=(i/W)|0; for(const d of dots) if(Math.hypot(x-d.cx,y-d.cy)<=d.r+1.0*ppm) return true; return false; };
+    for(const c of clComps(bg,W,H)){ let mx=0, wall=false, eye=false; for(const i of c){ if(dBg[i]>mx) mx=dBg[i]; if(dIn[i]<=1) wall=true; if(!eye&&nearDot(i)) eye=true; } if(!wall && !eye && mx<0.75*ppm) for(const i of c) work[i]=1; } }
   dInk=clDist(work,W,H);
   // 2. centre lines of everything else
   sk0=clThin(work,W,H);
@@ -203,7 +219,12 @@ function clRefine(res,sil,W,H,ppm,dIn,opt){
   for(const d of res.dots){ if(d.ring) clDisk(M,W,H,(()=>{ const C=[]; for(let k=0;k<=64;k++){ const a=2*Math.PI*k/64; C.push([d.cx+(d.r-0.45*ppm)*Math.cos(a), d.cy+(d.r-0.45*ppm)*Math.sin(a)]); } return C; })(),0.45*ppm); else clDisk(M,W,H,[[d.cx,d.cy]],d.r); }
   const cream=new Uint8Array(W*H); for(let i=0;i<W*H;i++) cream[i]=(sil[i]&&!M[i])?1:0;
   const dc=clDist(cream,W,H); let closed=0;
-  for(const c of clComps(cream,W,H)){ let mx=0; for(const i of c) if(dc[i]>mx) mx=dc[i]; if(mx<0.75*ppm){ for(const i of c) M[i]=1; closed++; } }
+  const loops=res.lines.filter(l=>l.c&&clLen(l.p)>=3*ppm).map(l=>({p:l.p, a:Math.abs(l.p.reduce((s,q,i)=>{ const t=l.p[(i+1)%l.p.length]; return s+q[0]*t[1]-t[0]*q[1]; },0))/2}));
+  const inside=(P,x,y)=>{ let c=false; for(let i=0,j=P.length-1;i<P.length;j=i++){ const a=P[i], b=P[j]; if(((a[1]>y)!==(b[1]>y)) && (x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; };
+  for(const c of clComps(cream,W,H)){ let mx=0, cx=0, cy=0, eye=false; for(const i of c){ if(dc[i]>mx) mx=dc[i]; const x=i%W, y=(i/W)|0; cx+=x; cy+=y; if(!eye) for(const d of res.dots) if(Math.hypot(x-d.cx,y-d.cy)<=d.r+1.0*ppm){ eye=true; break; } }
+    if(mx>=0.75*ppm || eye) continue; cx/=c.length; cy/=c.length;
+    if(loops.some(L=>inside(L.p,cx,cy) && c.length>=0.4*L.a)) continue;   // the inside of a closed eye or mouth stays open
+    for(const i of c) M[i]=1; closed++; }
   if(!closed) return res;
   const ink=new Uint8Array(W*H); for(let i=0;i<W*H;i++) ink[i]=(M[i]&&sil[i])?1:0;
   const r2=clRidges(ink,W,H,ppm,dIn,clDist(ink,W,H),Object.assign({},opt,{noDots:true}));

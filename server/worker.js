@@ -20,27 +20,29 @@ What to draw:
 - Keep the real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
 - Anatomy stays correct: every part keeps its real shape, position and proportion as in the original. Simplify how parts are drawn, never what they are; never turn a body part into an object such as a cup, tube or spiral.
 - More than 3 people or figures: draw only the 3 most important ones, large.
+- Never add anything: no borders, clouds, frames, halos, hearts, stars, sparkles or decorations that are not a real part of the subject. Leave out specks, dust, dots and texture completely; never turn them into symbols.
+- If the subject sits inside a shape (a heart, a circle, a badge), that shape is the outer outline of the drawing: keep it.
 
 Lines:
-- Pure black lines on plain white. No colour, no grey, no fills, no shading, no texture, no solid black areas (only pupils are solid).
-- Every line is exactly 14 pixels thick, the outline included. A line thinner than 12 pixels is a mistake.
+- Pure black lines on plain white, nothing else. No colour of any kind (no blue, red or skin tones), no grey, no filled areas, no shading, no texture. The only solid black shapes allowed are the pupils.
+- Draw every line, the outline included, with ONE thick round marker whose tip is 1/70 of the picture width (14 pixels on 1024), like a child's felt-tip pen, never a fine pen. Every line has exactly this thickness. If a detail cannot be drawn with this marker while keeping lines 4 marker-widths apart, leave the detail out; never draw a thinner line.
 - Every edge is drawn with ONE line. Never draw a part as a hollow band between two parallel lines: no doubled outline, no inner copy of the outline, no rim, seam, border or stitching. A tube, stalk, strap or stem is either one single line or part of the outline itself.
 - A solid symbol or shape (a female sign, a heart, a star, a letter-like sign) is drawn as its outer outline only, once, with nothing inside that copies its edge.
 - Lines that do not touch are at least 40 pixels apart everywhere. If two lines would come closer, draw one line instead.
-- Repeating marks (rungs, rings, stripes, folds, strands, petals' veins) are at most 5 single lines, at least 60 pixels apart.
+- Repeating marks (rungs, rings, stripes, folds, strands, veins, filing marks) are at most 4 single lines, at least 60 pixels apart. A uterus canal has at most 4 rungs.
 - Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape. No gaps, no dashed lines, no loose ends.
 - The subject's own edge is the outline: one single closed line exactly on its edge. Never draw a second line, a border or a halo around it.
-- The whole subject is one connected shape. Parts that stick out (stems, ears, tails, fingers, arms) are part of the one outline and at least 60 pixels wide; tips are rounded.
+- The whole drawing is ONE connected shape with ONE closed outline. Parts that float apart in the original (a hand above a head, a second object) are moved until they touch and join the main shape, or are left out. Parts that stick out (stems, ears, tails, fingers, arms, sleeves) are part of the one outline and at least 60 pixels wide, with rounded tips; never a thin spike or needle.
 - At most about 12 inner lines in total. Smooth, confident curves, like a minimal icon or a clean colouring-page drawing. Round things are clean circles or ovals.
 
 Faces and hands:
 - Keep every face exactly: where the eyes look, the shape of the mouth, the eyebrows and the expression.
 - Each eye is an almond or circle at least 70 pixels long with one solid round pupil at least 25 pixels across, placed where the original looks. No eyelashes, no lash flicks, no eye shading.
-- Each eyebrow is ONE single line, never a closed shape.
+- Each eyebrow is ONE single curved line, never a thin leaf shape or a closed shape.
 - The nose is one short line or hook, never a dot.
 - The mouth is one closed lip shape at least 90 pixels wide with one parting line, keeping the cupid's bow and the expression.
 - Hair is one shape with at most 3 inner lines, never many strands.
-- Hands are simple mitten shapes at least 120 pixels wide; fingers only where they matter, at least 40 pixels apart.
+- Hands are simple mitten shapes at least 120 pixels wide, never thin separate fingers; at most one thumb line and one finger line, at least 40 pixels apart.
 
 Output one image only, with no text.`;
 
