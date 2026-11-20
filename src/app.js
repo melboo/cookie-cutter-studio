@@ -1775,7 +1775,7 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   for(let i=lines.length-1;i>=0;i--){ const l=lines[i]; if(!l.c && clLen(l.p)<1.0*ppm) lines.splice(i,1); }
   { dots.sort((a,b)=>b.r-a.r); const keep=[]; for(const d of dots){ if(!keep.some(k=>Math.hypot(k.cx-d.cx,k.cy-d.cy)<2.5*ppm)) keep.push(d); } dots.length=0; dots.push(...keep); }
   // dots: small ones solid (at least 2 mm across), big ones rings
-  for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,d.keep?0.8*ppm:1.0*ppm),2.0*ppm); }
+  for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,d.keep?0.8*ppm:1.0*ppm),d.keep?1.0*ppm:2.0*ppm); }   // pupils at most 2 mm across
   return {lines,dots,hwOut}; }
 
 // second pass, on the cutter as built: draw the ridges (0.9 mm) and the wall band, close every gap of dough narrower than

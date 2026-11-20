@@ -103,7 +103,8 @@ The drawing must follow the owner's rules:
 - 20 Nov conversion: one dot per feature (a dot within 2.5 mm of a bigger one is dropped); very short leftover strokes stay short lines instead of becoming dots (that rule came from the old merge pass). The heart's faces are now clean.
 - Review round 15 (`docs/review/round15_review.md`): venus passes; pad, uterus and heart are close; faces are the main problem (stylish eyes collapse to pupil balls, closed mouths become smile lines or an empty "O", hearts' face erased). Reviewer's estimate: about 4/10 acceptable after the line-end fix, about 6/10 with a face fix.
 - 20 Nov conversion: line ends that stop just short of the wall (within 3 mm, heading towards it) run straight on into it; ends whose centre is 0.9–2.4 mm from another line join it. Pad and uterus rungs now reach the wall.
-- Next: faces (keep closed mouth/eye loops as loops even when they touch other lines, cap pupils at 2 mm, gate for collapsed face loops), then a Gemini rules update for eyes, mouths, tubes, mitten hands and margins.
+- 20 Nov: pupils capped at 2 mm across. Gemini rules updated (needs deploying): every area white (no fill on hats, stains, clothes); inner lines same marker as the outline; eyes ONE closed almond at least 70x35 px with a 25-30 px pupil and 30 px of white around (not touching brow, nose, hair) so the cutter's eye rebuild can work; brows one stroke; mouth at least 90x40 px with one parting line, not touching nose or chin; hair 3 smooth lines; mittens with fingertips at least 90 px; tubes/limbs never two parallel lines; cut-off parts shortened to a rounded end 60 px inside the edge.
+- Still open in the conversion: eyes and mouths that touch other lines collapse; telling a hollow brow from a closed mouth is unreliable, so this leans on the drawing rules.
 
 ## Status at review round 7b
 

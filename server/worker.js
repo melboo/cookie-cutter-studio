@@ -14,7 +14,7 @@ const MAX_BYTES = 6 * 1024 * 1024; // largest picture accepted (base64 included)
 const SYSTEM_LINEART = `You turn pictures into clean black line art for cookie cutters. Draw on a square 1024 x 1024 pixel canvas and follow these rules for every picture. The sizes are in pixels on that canvas and they are strict.
 
 What to draw:
-- Only the main subject, centred. Leave a margin of at least 60 pixels on all four sides: nothing touches or crosses the edge of the canvas. A subject cut off in the original (a bust, an arm coming in from the side) ends in a smooth, rounded end inside the margin, so the outline goes all the way round.
+- Only the main subject, centred. Leave a margin of at least 60 pixels on all four sides: nothing touches or crosses the edge of the canvas. A subject cut off in the original (a bust, an arm or sleeve coming in from the side) is shortened so it ends in a smooth, rounded end at least 60 pixels inside the edge, and the outline goes all the way round. Check the four edges before you finish.
 - No words, letters or numbers anywhere. Remove every label and the thin pointer line to it, and remove arrows, captions, logos, frames, sparkles, motion marks, shadows and background objects.
 - Keep what the subject is. An object stays that object with its own silhouette (a pad keeps its wings, a bottle stays a bottle); never turn it into an animal, a face or another thing. Never add anything that is not in the original, and never leave out a part of what the subject is (a head, a face, a hand, an opening, a petal): make it bigger and simpler instead.
 - Keep the real silhouette, simplified and smooth, with the bumps, tips and notches that make it recognisable.
@@ -24,9 +24,10 @@ What to draw:
 - If the subject sits inside a shape (a heart, a circle, a badge), that shape is the outer outline of the drawing: keep it.
 
 Lines:
-- Pure black lines on plain white, nothing else. No colour of any kind (no blue, red or skin tones), no grey, no filled areas, no shading, no texture. The only solid black shapes allowed are the pupils.
+- Pure black lines on plain white, nothing else. Every area stays white: no colour of any kind (no blue, purple, red or skin tones), no grey, no filled areas, no shading, no texture, not even on a hat, a stain or clothing. The only solid black shapes allowed are the pupils.
+- Every line inside the outline uses the same marker as the outline, never thinner. Leave out any detail that does not fit with 40 pixels of white around it.
 - Draw every line, the outline included, with ONE thick round marker whose tip is 1/70 of the picture width (14 pixels on 1024), like a child's felt-tip pen, never a fine pen. Every line has exactly this thickness. If a detail cannot be drawn with this marker while keeping lines 4 marker-widths apart, leave the detail out; never draw a thinner line.
-- Every edge is drawn with ONE line. Never draw a part as a hollow band between two parallel lines: no doubled outline, no inner copy of the outline, no rim, seam, border or stitching. A tube, stalk, strap or stem is either one single line or part of the outline itself.
+- Every edge is drawn with ONE line. Never draw a part as a hollow band between two parallel lines: no doubled outline, no inner copy of the outline, no rim, seam, border or stitching. A tube, canal wall, stalk, strap, limb or stem is either one single line or a solid part of the outline itself, never two parallel lines.
 - A solid symbol or shape (a female sign, a heart, a star, a letter-like sign) is drawn as its outer outline only, once, with nothing inside that copies its edge.
 - Lines that do not touch are at least 40 pixels apart everywhere. If two lines would come closer, draw one line instead.
 - Repeating marks (rungs, rings, stripes, folds, strands, veins, filing marks) are at most 4 single lines, at least 60 pixels apart. A uterus canal has at most 4 rungs.
@@ -37,12 +38,12 @@ Lines:
 
 Faces and hands:
 - Keep every face exactly: where the eyes look, the shape of the mouth, the eyebrows and the expression.
-- Each eye is an almond or circle at least 70 pixels long with one solid round pupil at least 25 pixels across, placed where the original looks. No eyelashes, no lash flicks, no eye shading.
-- Each eyebrow is ONE single curved line, never a thin leaf shape or a closed shape.
+- Each eye is ONE closed almond at least 70 pixels long and 35 pixels tall, with one solid round pupil 25 to 30 pixels across inside it, placed where the original looks. The eye does not touch the brow, the nose, the hair or any other line: keep at least 30 pixels of white around it. No eyelashes, no lash flicks, no eye shading.
+- Each eyebrow is ONE single curved stroke, never a thin leaf shape or a closed shape.
 - The nose is one short line or hook, never a dot.
-- The mouth is one closed lip shape at least 90 pixels wide with one parting line, keeping the cupid's bow and the expression.
-- Hair is one shape with at most 3 inner lines, never many strands.
-- Hands are simple mitten shapes at least 120 pixels wide, never thin separate fingers; at most one thumb line and one finger line, at least 40 pixels apart.
+- The mouth is ONE closed lip shape at least 90 pixels wide and 40 pixels tall, with ONE parting line from corner to corner, keeping the cupid's bow and the expression. It does not touch the nose or the chin line.
+- Hair is one shape with at most 3 smooth inner lines, never many strands and never zig-zags.
+- Hands are simple mitten shapes at least 120 pixels wide, with no fingertip narrower than 90 pixels; never thin separate fingers; at most one thumb line and one finger line, at least 40 pixels apart.
 
 Output one image only, with no text.`;
 
