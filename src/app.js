@@ -1675,6 +1675,8 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
       if(dIn[Math.round(cy)*W+Math.round(cx)] < r+1.6*ppm) continue;                                              // never on the wall
       dots.push({cx,cy,r,keep:true});
       } }
+  // one dot per feature: a dot within 2.5 mm of a bigger one is the same eye or nostril
+  { dots.sort((a,b)=>b.r-a.r); const keep=[]; for(const d of dots){ if(!keep.some(k=>Math.hypot(k.cx-d.cx,k.cy-d.cy)<2.5*ppm)) keep.push(d); } dots.length=0; dots.push(...keep); }
   // an eye drawn as one small separate shape (almond + pupil) is rebuilt as its almond outline plus the pupil dot,
   // because thinning a narrow almond with a big pupil inside collapses it into a stub
   if(!opt.noDots && dots.some(d=>d.keep)){ const lab=new Int32Array(W*H).fill(-1), cs=clComps(work,W,H); cs.forEach((c,k)=>{ for(const i of c) lab[i]=k; });
@@ -1722,7 +1724,8 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   for(const e of G.edges){ const L=clLen(e.p);
     if(!e.closed && d2[e.a]===1 && d2[e.b]===1 && L<2.5*ppm){ let cx=0,cy=0; for(const p of e.p){ cx+=p[0]; cy+=p[1]; } cx/=e.p.length; cy/=e.p.length;
       let near=0; for(const p of e.p){ const i=Math.round(p[1])*W+Math.round(p[0]); near=Math.max(near,ink[i]?1:0); }
-      if(near && L>=0.4*ppm && !opt.noDots) dots.push({cx,cy,r:Math.max(1.0*ppm,L/2)}); continue; }
+      if(near && L>=1.0*ppm) lines.push(clSmooth(e.p,ppm,false,0.4));   // a short stroke stays a short stroke (a dot only if drawn as one)
+      continue; }
     if(e.closed && L<3*ppm) continue;
     const sm=clSmooth(e.p,ppm,!!e.closed,0.6); if(!e.closed){ sm.wa=!opt.merge&&!!atWall[e.a]; sm.wb=!opt.merge&&!!atWall[e.b]; } lines.push(sm); }
   // 6. wall: stretches that run ALONG the wall within ~3.5 mm go onto it (no sliver of dough between); lines that head into the
@@ -1753,6 +1756,7 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
       if(moved){ const sm=clSmooth(l.p,ppm,false,0.5); l.p=sm.p; } } }
   // nubs: open lines shorter than 1 mm that hang off nothing
   for(let i=lines.length-1;i>=0;i--){ const l=lines[i]; if(!l.c && clLen(l.p)<1.0*ppm) lines.splice(i,1); }
+  { dots.sort((a,b)=>b.r-a.r); const keep=[]; for(const d of dots){ if(!keep.some(k=>Math.hypot(k.cx-d.cx,k.cy-d.cy)<2.5*ppm)) keep.push(d); } dots.length=0; dots.push(...keep); }
   // dots: small ones solid (at least 2 mm across), big ones rings
   for(const d of dots){ if(d.r>2.25*ppm){ d.ring=true; } else d.r=Math.min(Math.max(d.r,d.keep?0.8*ppm:1.0*ppm),2.0*ppm); }
   return {lines,dots,hwOut}; }
