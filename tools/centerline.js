@@ -221,9 +221,10 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
         if(wd>T && wd<3.0*ppm && ((wx-p[0])*dx+(wy-p[1])*dy)/wd>0.5){ const ext=[]; let x=p[0], y=p[1];
           for(let k=0;k<16;k++){ x+=dx*0.25*ppm; y+=dy*0.25*ppm; ext.push([x,y]); if(nearO(x,y)[2]<=T) break; }
           if(nearO(x,y)[2]<=T*1.3){ if(end) l.p=l.p.concat(ext); else l.p=ext.reverse().concat(l.p); continue; } }
-        // another line: centres 0.9-2.4 mm apart (a dough gap under 1.5 mm) -> join it
+        if(wd>T && wd<3.2*ppm){ const k=Math.max(1,Math.ceil((wd-T)/(0.25*ppm))), seg=[]; for(let j=1;j<=k;j++){ const t=j/k*(wd-T)/wd; seg.push([p[0]+(wx-p[0])*t, p[1]+(wy-p[1])*t]); } if(end) l.p=l.p.concat(seg); else l.p=seg.reverse().concat(l.p); continue; }
+        // another line: centres 0.9-1.8 mm apart (a dough gap under ~0.9 mm) and heading towards it -> join it
         const [lx,ly,ld]=nearL(p[0],p[1],l,i);
-        if(ld>0.3*ppm && ld<2.4*ppm){ const seg=[]; const k=Math.max(1,Math.ceil(ld/(0.25*ppm))); for(let j=1;j<=k;j++) seg.push([p[0]+(lx-p[0])*j/k, p[1]+(ly-p[1])*j/k]); if(end) l.p=l.p.concat(seg); else l.p=seg.reverse().concat(l.p); } } } }
+        if(ld>0.3*ppm && ld<1.8*ppm && ((lx-p[0])*dx+(ly-p[1])*dy)/ld>0.3){ const seg=[]; const k=Math.max(1,Math.ceil(ld/(0.25*ppm))); for(let j=1;j<=k;j++) seg.push([p[0]+(lx-p[0])*j/k, p[1]+(ly-p[1])*j/k]); if(end) l.p=l.p.concat(seg); else l.p=seg.reverse().concat(l.p); } } } }
   // nubs: open lines shorter than 1 mm that hang off nothing
   for(let i=lines.length-1;i>=0;i--){ const l=lines[i]; if(!l.c && clLen(l.p)<1.0*ppm) lines.splice(i,1); }
   { dots.sort((a,b)=>b.r-a.r); const keep=[]; for(const d of dots){ if(!keep.some(k=>Math.hypot(k.cx-d.cx,k.cy-d.cy)<2.5*ppm)) keep.push(d); } dots.length=0; dots.push(...keep); }

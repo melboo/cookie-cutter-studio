@@ -65,7 +65,7 @@ The drawing must follow the owner's rules:
 - **Rubric:** `docs/review/rubric.md`, with drawing checks D1–D13 and cutter checks C1–C14. C14 means joins in the cutter must be as smooth as in the drawing.
 - **Reviewer:** a separate agent judges each round against Bakerlogy and gives PASS/FAIL per picture. The owner doesn't want to critique by hand.
 - **Before/after sheets:** always show original | Gemini drawing | cutter.
-- **Test pictures:** contemporary feminist illustrations from Unsplash (free licence), loaded straight from the source: uterus, pad, lotus, nails, hearts, stylish, duo, heart, hands, venus. **Don't commit them** (no third-party images in the public repo). The older set is in `test-images/` (temporary; remove before merging).
+- **Test pictures:** contemporary feminist illustrations from Unsplash (free licence), loaded straight from the source: uterus, pad, lotus, nails, hearts, stylish, duo, heart, hands, venus. **Don't commit them** (no third-party images in the public repo). The older test set (`test-images/`) was removed before the beta merge.
 
 ## Current status
 
@@ -105,6 +105,8 @@ The drawing must follow the owner's rules:
 - 20 Nov conversion: line ends that stop just short of the wall (within 3 mm, heading towards it) run straight on into it; ends whose centre is 0.9–2.4 mm from another line join it. Pad and uterus rungs now reach the wall.
 - 20 Nov: pupils capped at 2 mm across. Gemini rules updated (needs deploying): every area white (no fill on hats, stains, clothes); inner lines same marker as the outline; eyes ONE closed almond at least 70x35 px with a 25-30 px pupil and 30 px of white around (not touching brow, nose, hair) so the cutter's eye rebuild can work; brows one stroke; mouth at least 90x40 px with one parting line, not touching nose or chin; hair 3 smooth lines; mittens with fingertips at least 90 px; tubes/limbs never two parallel lines; cut-off parts shortened to a rounded end 60 px inside the edge.
 - Review round 16 (`docs/review/round16_review.md`), 20 Nov evening: venus passes; pad and uterus are 1–2 faults away; stylish keeps its closed lips; lotus fits the frame. Gemini is unstable from run to run (heart crowd, duo and hands open again) and ignores the pixel sizes, almond eyes, one-stroke brows and single-line tubes. Reviewer count: 1/10 acceptable today, about 3/10 after join/hub fixes, about 5/10 if faces are also protected. Remaining conversion work: protect faces (closed loops stay loops, never erase a profile face, filled brow -> one stroke), joins only where the drawing meant them (the 0.9–2.4 mm join can weld a mouth to the jaw), clean hubs and crossings, full circles where they overlap the outline.
+- 20 Nov, after round 16: line ends within 3.2 mm of the wall join it whatever their direction (concave corners, pad); joins to another line only when the centres are 0.9–1.8 mm apart and the end heads towards it (the wider rule welded a mouth to the jaw). A junction test for false pupils was tried and dropped: it also removed real pupils.
+- BETA: merged into `main` (live on GitHub Pages) on 20 Nov at the owner's request. Simple subjects (venus, pad, uterus, lotus) give good cutters; faces and busy scenes are hit-and-miss and lean on the gates plus 'Draw it again' / 'Trace it myself'.
 - Still open in the conversion: eyes and mouths that touch other lines collapse; telling a hollow brow from a closed mouth is unreliable, so this leans on the drawing rules.
 
 ## Status at review round 7b
@@ -150,7 +152,7 @@ The rules for these were added in `server/worker.js` (commit `313c1a9`). They ta
 - Mobile must work.
 - No API keys anywhere in the code or the repo.
 - No copyrighted art in the public repo.
-- Before merging: remove `test-images/` and the debug code.
+- Merged into `main` as a beta on 20 Nov (test-images removed). Further work continues on `auto-cookie`.
 
 ## Testing tips
 
