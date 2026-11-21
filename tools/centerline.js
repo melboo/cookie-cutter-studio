@@ -77,6 +77,13 @@ function clSmooth(P,ppm,closed,sigmaMM,maxMove){
   if(n<4) return {p:Q,c:closed};
   if(closed && n>=12){ let cx=0,cy=0; for(const q of Q){ cx+=q[0]; cy+=q[1]; } cx/=n; cy/=n; let R=0; for(const q of Q) R+=Math.hypot(q[0]-cx,q[1]-cy); R/=n; let dev=0; for(const q of Q) dev=Math.max(dev,Math.abs(Math.hypot(q[0]-cx,q[1]-cy)-R));
     if(dev<0.12*R && R<20*ppm){ const m=Math.max(48,Math.round(2*Math.PI*R/step)); const C=[]; for(let i=0;i<m;i++){ const a=2*Math.PI*i/m; C.push([cx+R*Math.cos(a),cy+R*Math.sin(a)]); } return {p:C,c:true,circle:{cx,cy,R}}; } }
+  // near-elliptical closed loops (a bell's rim, a cherry, a grape) become true ellipses: least-squares fit on the principal axes
+  if(closed && n>=16){ let cx=0,cy=0; for(const q of Q){ cx+=q[0]; cy+=q[1]; } cx/=n; cy/=n; let sxx=0,syy=0,sxy=0; for(const q of Q){ const dx=q[0]-cx, dy=q[1]-cy; sxx+=dx*dx; syy+=dy*dy; sxy+=dx*dy; }
+    const th=0.5*Math.atan2(2*sxy,sxx-syy), c=Math.cos(th), sn=Math.sin(th); let a11=0,a12=0,a22=0,b1=0,b2=0; const UV=Q.map(q=>{ const dx=q[0]-cx, dy=q[1]-cy; return [dx*c+dy*sn, -dx*sn+dy*c]; });
+    for(const [u,v] of UV){ const U=u*u, V=v*v; a11+=U*U; a12+=U*V; a22+=V*V; b1+=U; b2+=V; } const det=a11*a22-a12*a12;
+    if(Math.abs(det)>1e-12){ const A=(b1*a22-b2*a12)/det, B=(a11*b2-a12*b1)/det;
+      if(A>0&&B>0){ const ra=1/Math.sqrt(A), rb=1/Math.sqrt(B); let dev=0; for(const [u,v] of UV){ const r=Math.sqrt(u*u*A+v*v*B); dev=Math.max(dev,Math.abs(r-1)); }
+        if(dev<0.07 && Math.max(ra,rb)<25*ppm){ const m=Math.max(48,Math.round(2*Math.PI*Math.max(ra,rb)/step)), E=[]; for(let i=0;i<m;i++){ const t=2*Math.PI*i/m, u=ra*Math.cos(t), v=rb*Math.sin(t); E.push([cx+u*c-v*sn, cy+u*sn+v*c]); } return {p:E,c:true,circle:{cx,cy,R:(ra+rb)/2}}; } } } }
   const k=Math.max(2,Math.round(1.0*ppm/step)), hw=Math.ceil(2.5*sig/step), idx=j=>closed?((j%n)+n)%n:j;
   const cs=new Float32Array(n).fill(-1);
   for(let i=0;i<n;i++){ const a=idx(i-k), b=idx(i+k); if(a<0||b<0||a>=n||b>=n) continue; const u=[Q[a][0]-Q[i][0],Q[a][1]-Q[i][1]], v=[Q[b][0]-Q[i][0],Q[b][1]-Q[i][1]];

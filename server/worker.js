@@ -29,15 +29,19 @@ Lines:
 - Draw every line, the outline included, with ONE thick round marker whose tip is 1/70 of the picture width (14 pixels on 1024), like a child's felt-tip pen, never a fine pen. Every line has exactly this thickness. If a detail cannot be drawn with this marker while keeping lines 4 marker-widths apart, leave the detail out; never draw a thinner line.
 - Every edge is drawn with ONE line. Never draw a part as a hollow band between two parallel lines: no doubled outline, no inner copy of the outline, no rim, seam, border or stitching. A tube, canal wall, stalk, strap, limb or stem is either one single line or a solid part of the outline itself, never two parallel lines.
 - A solid symbol or shape (a female sign, a heart, a star, a letter-like sign) is drawn as its outer outline only, once, with nothing inside that copies its edge.
+- If the original is a line icon (a shape drawn with a thick band, like a chess piece or a symbol outline), draw only the outer edge of the whole band as the outline. Holes in the band stay as one inner line only where the original has a real opening (a slot, a ring hole). Never draw the inside edge of the band. Never join separate parts with a bar that is not in the original.
+- At most one rim, collar or inner-ear line per part, at least 40 pixels from the outline; textures and drizzles become at most 3 lines.
 - Lines that do not touch are at least 40 pixels apart everywhere. If two lines would come closer, draw one line instead.
 - Repeating marks (rungs, rings, stripes, folds, strands, veins, filing marks) are at most 4 single lines, at least 60 pixels apart. A uterus canal has at most 4 rungs.
 - Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape. No gaps, no dashed lines, no loose ends.
 - The subject's own edge is the outline: one single closed line exactly on its edge. Never draw a second line, a border or a halo around it.
+- A stem, string, straw, whisker, antenna, tail tip or leaf tip is never a single line sticking out and never two parallel lines. Either leave it out, or draw it as part of the outline at least 60 pixels wide with a round end. Leave out all whiskers. Two cherries hang from one short, thick stem shape; the space between thin stems is never part of the drawing.
 - The whole drawing is ONE connected shape with ONE closed outline. Parts that float apart in the original (a hand above a head, a second object) are moved until they touch and join the main shape, or are left out. Parts that stick out (stems, ears, tails, fingers, arms, sleeves) are part of the one outline and at least 60 pixels wide, with rounded tips; never a thin spike or needle.
 - At most about 12 inner lines in total. Smooth, confident curves, like a minimal icon or a clean colouring-page drawing. Round things are clean circles or ovals.
 
 Faces and hands:
 - Keep every face exactly: where the eyes look, the shape of the mouth, the eyebrows and the expression.
+- The almond-eye and lip rules below are for human faces only. Animals and cartoon characters keep their own eyes and mouth: a round eye stays a round eye with one round pupil (no highlight), and a smile line stays one smile line. Never add lips, teeth, eyelids or eyebrows that the original does not show. A tiny human face is drawn larger, never with a fine pen.
 - Each eye is ONE closed almond at least 70 pixels long and 35 pixels tall, with one solid round pupil 25 to 30 pixels across inside it, placed where the original looks. The eye does not touch the brow, the nose, the hair or any other line: keep at least 30 pixels of white around it. No eyelashes, no lash flicks, no eye shading.
 - Each eyebrow is ONE single curved stroke, never a thin leaf shape or a closed shape.
 - The nose is one short line or hook, never a dot.
