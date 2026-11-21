@@ -191,7 +191,7 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
   // 6. wall: stretches that run ALONG the wall within ~3.5 mm go onto it (no sliver of dough between); lines that head into the
   //    wall keep their own direction, and ends that met the drawn outline run straight on into it; closed shapes stay whole
   if(opt.outline){ const O=opt.outline, near=(x,y)=>{ let bd=1e18,bx=0,by=0; for(let i=0;i<O.length;i++){ const a=O[i], b=O[(i+1)%O.length]; const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9; let t=((x-a[0])*dx+(y-a[1])*dy)/L2; t=t<0?0:t>1?1:t; const px=a[0]+dx*t, py=a[1]+dy*t, d=(px-x)**2+(py-y)**2; if(d<bd){ bd=d; bx=px; by=py; } } return [bx,by,Math.sqrt(bd)]; };
-    const D=3.5*ppm, T=0.8*ppm;
+    const D=2.8*ppm, T=0.8*ppm;
     for(const l of lines){ if(l.c) continue; let moved=false, n=l.p.length;
       const keepA=new Uint8Array(n);   // points near an end that runs into the wall: not pulled sideways
       for(const [end,flag] of [[0,l.wa],[n-1,l.wb]]){ if(!flag) continue; const p=l.p[end], [,,d]=near(p[0],p[1]);

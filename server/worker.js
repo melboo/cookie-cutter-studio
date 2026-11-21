@@ -33,14 +33,17 @@ Lines:
 - At most one rim, collar or inner-ear line per part, at least 40 pixels from the outline; textures and drizzles become at most 3 lines.
 - Lines that do not touch are at least 40 pixels apart everywhere. If two lines would come closer, draw one line instead.
 - Repeating marks (rungs, rings, stripes, folds, strands, veins, filing marks) are at most 4 single lines, at least 60 pixels apart. A uterus canal has at most 4 rungs.
+- Before you finish, look for any two lines that run side by side at the same distance for more than 100 pixels, and delete the inner one. This removes inner copies of the outline, double rims, collars, bands and sticker borders. A thick black band in the original becomes ONE line along its outside edge. Do not add or change symbols: '=' stays two short bars and is not joined to anything.
 - Lines are complete and connected: every inner line ends exactly on the outline or on another line, or is a small closed shape. No gaps, no dashed lines, no loose ends.
 - The subject's own edge is the outline: one single closed line exactly on its edge. Never draw a second line, a border or a halo around it.
-- A stem, string, straw, whisker, antenna, tail tip or leaf tip is never a single line sticking out and never two parallel lines. Either leave it out, or draw it as part of the outline at least 60 pixels wide with a round end. Leave out all whiskers. Two cherries hang from one short, thick stem shape; the space between thin stems is never part of the drawing.
+- Leave out every stem, stalk, string, straw, whisker and antenna. A cherry on a cake or pudding is a plain circle sitting on top, with no stem. Two cherries are two circles that touch, with one short leaf on top. Never draw a line around the whole subject to hold thin parts together, and never add a border or halo around the subject.
 - The whole drawing is ONE connected shape with ONE closed outline. Parts that float apart in the original (a hand above a head, a second object) are moved until they touch and join the main shape, or are left out. Parts that stick out (stems, ears, tails, fingers, arms, sleeves) are part of the one outline and at least 60 pixels wide, with rounded tips; never a thin spike or needle.
 - At most about 12 inner lines in total. Smooth, confident curves, like a minimal icon or a clean colouring-page drawing. Round things are clean circles or ovals.
 
 Faces and hands:
 - Keep every face exactly: where the eyes look, the shape of the mouth, the eyebrows and the expression.
+- Eyes that are open in the original stay open; closed eyes stay closed. Never draw eyelashes or lash flicks.
+- If the picture shows a person and the face would be narrower than one third of the drawing, crop to head and shoulders so the face fills at least one third of the width.
 - The almond-eye and lip rules below are for human faces only. Animals and cartoon characters keep their own eyes and mouth: a round eye stays a round eye with one round pupil (no highlight), and a smile line stays one smile line. Never add lips, teeth, eyelids or eyebrows that the original does not show. A tiny human face is drawn larger, never with a fine pen.
 - Each eye is ONE closed almond at least 70 pixels long and 35 pixels tall, with one solid round pupil 25 to 30 pixels across inside it, placed where the original looks. The eye does not touch the brow, the nose, the hair or any other line: keep at least 30 pixels of white around it. No eyelashes, no lash flicks, no eye shading.
 - Each eyebrow is ONE single curved stroke, never a thin leaf shape or a closed shape.
