@@ -1735,6 +1735,24 @@ function clRidges(ink,W,H,ppm,dIn,dInk,opt){ dInk=dInk.slice();
       continue; }
     if(e.closed && L<3*ppm) continue;
     const sm=clSmooth(e.p,ppm,!!e.closed,0.6); if(!e.closed){ sm.wa=!opt.merge&&!!atWall[e.a]; sm.wb=!opt.merge&&!!atWall[e.b]; } lines.push(sm); }
+  // 5b. round things stay round where other lines meet them: every enclosed patch of dough that is nearly a circle or an
+  //     ellipse (a cherry, a bell's rim, a grape) gets a fitted curve, and the lines around it, and the wall where it shares
+  //     the edge, are snapped onto that exact curve
+  if(!opt.noRound){ const sk=[]; for(let i=0;i<W*H;i++) if(ink[i]&&dInk[i]>=1) sk.push(dInk[i]); sk.sort((a,b)=>a-b);
+    const hw=Math.max(0.3*ppm, sk.length?sk[Math.floor(sk.length*0.75)]:0.5*ppm), cream=new Uint8Array(W*H); for(let i=0;i<W*H;i++) cream[i]=(dIn[i]>0&&!ink[i])?1:0;
+    const fits=[];
+    for(const c of clComps(cream,W,H)){ if(c.length<Math.PI*(1.2*ppm)**2 || c.length>Math.PI*(14*ppm)**2) continue;
+      const inC=new Set(c), B=[]; for(const i of c){ const x=i%W; if(!inC.has(i-1)||!inC.has(i+1)||!inC.has(i-W)||!inC.has(i+W)) B.push([x+0.5,((i/W)|0)+0.5]); }
+      if(B.length<20) continue; let cx=0,cy=0; for(const q of B){ cx+=q[0]; cy+=q[1]; } cx/=B.length; cy/=B.length; let sxx=0,syy=0,sxy=0; for(const q of B){ const dx=q[0]-cx, dy=q[1]-cy; sxx+=dx*dx; syy+=dy*dy; sxy+=dx*dy; }
+      const th=0.5*Math.atan2(2*sxy,sxx-syy), co=Math.cos(th), sn=Math.sin(th); let a11=0,a12=0,a22=0,b1=0,b2=0; const UV=B.map(q=>{ const dx=q[0]-cx, dy=q[1]-cy; return [dx*co+dy*sn, -dx*sn+dy*co]; });
+      for(const [u,v] of UV){ const U=u*u, V=v*v; a11+=U*U; a12+=U*V; a22+=V*V; b1+=U; b2+=V; } const det=a11*a22-a12*a12; if(Math.abs(det)<1e-12) continue;
+      const A=(b1*a22-b2*a12)/det, Bq=(a11*b2-a12*b1)/det; if(!(A>0&&Bq>0)) continue; const ra=1/Math.sqrt(A), rb=1/Math.sqrt(Bq); if(Math.max(ra,rb)>2.2*Math.min(ra,rb)) continue;
+      let dev=0; for(const [u,v] of UV) dev=Math.max(dev,Math.abs(Math.sqrt(u*u*A+v*v*Bq)-1)); if(dev>0.09) continue;
+      fits.push({cx,cy,co,sn,ra,rb}); }
+    const snap=(P,off,tol)=>{ for(let k=0;k<P.length;k++){ const p=P[k]; for(const f of fits){ const dx=p[0]-f.cx, dy=p[1]-f.cy, u=dx*f.co+dy*f.sn, v=-dx*f.sn+dy*f.co, a=f.ra+off, b=f.rb+off;
+        const r=Math.sqrt((u/a)**2+(v/b)**2); if(r>0 && Math.abs(r-1)*Math.min(a,b)<tol){ const u2=u/r, v2=v/r; P[k]=[f.cx+u2*f.co-v2*f.sn, f.cy+u2*f.sn+v2*f.co]; break; } } } };
+    if(fits.length){ for(const l of lines) snap(l.p,hw,0.7*ppm); if(opt.outline) snap(opt.outline,2*hw,0.6*ppm); }
+    if(opt.debug) console.error('  round fits',fits.length); }
   // 6. wall: stretches that run ALONG the wall within ~3.5 mm go onto it (no sliver of dough between); lines that head into the
   //    wall keep their own direction, and ends that met the drawn outline run straight on into it; closed shapes stay whole
   if(opt.outline){ const O=opt.outline, near=(x,y)=>{ let bd=1e18,bx=0,by=0; for(let i=0;i<O.length;i++){ const a=O[i], b=O[(i+1)%O.length]; const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9; let t=((x-a[0])*dx+(y-a[1])*dy)/L2; t=t<0?0:t>1?1:t; const px=a[0]+dx*t, py=a[1]+dy*t, d=(px-x)**2+(py-y)**2; if(d<bd){ bd=d; bx=px; by=py; } } return [bx,by,Math.sqrt(bd)]; };
